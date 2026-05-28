@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-warehouse"></i> Gestión de Bodegas</h1>
+    <button class="btn btn-primary" onclick="openModal('createWarehouseModal')">
+        <i class="fa-solid fa-plus"></i> Nueva Bodega
+    </button>
+</div>
+
+<div class="control-panel">
+    <div class="unified-search">
+        <i class="fa-solid fa-warehouse"></i>
+        <input type="text" id="warehousesSearch" placeholder="Busca por nombre de bodega...">
+    </div>
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-boxes-stacked"></i> <strong id="totalCount">0</strong></div>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="warehousesTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre Bodega</th>
+                <th>Terminal</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for warehouse in warehouses %}
+            <tr class="searchable-row">
+                <td>{{ warehouse.WarehouseID }}</td>
+                <td><strong>{{ warehouse.Name }}</strong></td>
+                <td>{{ warehouse.TerminalName }}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="openEditWarehouse('{{ warehouse.WarehouseID }}', '{{ warehouse.Name }}', '{{ warehouse.TerminalID }}')">
+                        <i class="fa-solid fa-edit"></i>
+                    </button>
+                    <form method="POST" class="action-form" onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar esta bodega?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="warehouse_id" value="{{ warehouse.WarehouseID }}">
+                        <button type="submit" class="btn btn-sm btn-danger">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Create Modal -->
+<div id="createWarehouseModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('createWarehouseModal')">&times;</span>
+        <h2>Nueva Bodega</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Nombre de la Bodega</label>
+                <input type="text" name="name" class="form-control" required placeholder="Ej: Bodega de Repuestos">
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" class="form-control" required>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Crear Bodega</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editWarehouseModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('editWarehouseModal')">&times;</span>
+        <h2>Editar Bodega</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="warehouse_id" id="edit_warehouse_id">
+            <div class="form-group">
+                <label>Nombre de la Bodega</label>
+                <input type="text" name="name" id="edit_warehouse_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" id="edit_warehouse_terminal" class="form-control" required>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Actualizar Bodega</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openEditWarehouse(id, name, terminalId) {
+        document.getElementById('edit_warehouse_id').value = id;
+        document.getElementById('edit_warehouse_name').value = name;
+        document.getElementById('edit_warehouse_terminal').value = terminalId;
+        openModal('editWarehouseModal');
+    }
+
+    // Pagination & Search
+    document.addEventListener("DOMContentLoaded", function() {
+        const grid = HGT_DataTable('warehousesTable', { 
+            onUpdate: (visible, total) => {
+                document.getElementById('totalCount').innerText = total;
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    :root {
+        --hgt-orange: #FF6600;
+        --hgt-greyblue: #212A37;
+        --hgt-aqua: #68BFAD;
+        --hgt-white: #FFFFFF;
+        --hgt-light: #F5F5F5;
+    }
+    
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        background: var(--hgt-greyblue);
+        color: white;
+        margin: -2rem -2rem 1.5rem -2rem;
+    }
+    .page-header h1 { margin: 0; font-size: 1.75rem; color: white; }
+    .page-header h1 i { color: var(--hgt-orange); margin-right: 0.5rem; }
+    
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+        background: var(--hgt-greyblue);
+        color: white;
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+    }
+    .data-table td {
+        padding: 0.875rem 1rem;
+        border-bottom: 1px solid #eee;
+    }
+    .data-table tr:nth-child(even) { background: #fafafa; }
+    .data-table tr:hover { background: rgba(255,102,0,0.05); }
+    
+    .table-container.datagrid-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-top:1rem;
+    }
+    .data-table { min-width: 1100px; }
+    
+    .data-table th:last-child,
+    .data-table td:last-child {
+        min-width: 120px;
+        width: 120px;
+    }
+    
+    .data-table td:last-child,
+    .data-table td.dt-actions-col {
+        min-width: 120px !important;
+        width: 120px !important;
+        display: table-cell !important;
+    }
+    .data-table td:last-child *,
+    .data-table td.dt-actions-col * {
+        display: inline-block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    .badge-serial {
+        background: var(--hgt-greyblue);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: monospace;
+        font-weight: 600;
+    }
+    
+    .btn-action {
+        padding: 0.375rem 0.625rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 0.25rem;
+        transition: all 0.2s;
+    }
+    .btn-view { background: var(--hgt-aqua); color: white; }
+    .btn-view:hover { background: #5aa89c; }
+    .btn-history { background: var(--hgt-greyblue); color: white; }
+    .btn-history:hover { background: #1a1f2a; }
+    .btn-edit { background: var(--hgt-orange); color: white; }
+    .btn-edit:hover { background: #d95700; }
+    
+    .btn-primary {
+        background: var(--hgt-orange);
+        color: white;
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 6px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .btn-primary:hover { background: #d95700; }
+    
+    .empty-state { text-align: center; padding: 3rem; color: #888; }
+    .empty-state i { font-size: 3rem; color: var(--hgt-aqua); margin-bottom: 1rem; }
+    
+    .loading-spinner { text-align: center; padding: 3rem; }
+    .loading-spinner i { font-size: 2rem; color: var(--hgt-orange); animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    
+    .stats-bar {
+        display: flex;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .stat-item {
+        padding: 0.5rem 1rem;
+        background: var(--hgt-light);
+        border-radius: 6px;
+        font-weight: 500;
+    }
+    .stat-item strong { color: var(--hgt-orange); font-size: 1.25rem; }
+</style>
+
+<div class="page-header">
+    <h1><i class="fa-solid fa-users"></i> Personal Asignatario</h1>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="{{ url_for('staff.download_staff_template') }}" class="btn-primary" style="background: var(--hgt-greyblue);">
+            <i class="fa-solid fa-download"></i> Descargar Plantilla
+        </a>
+        {% if session.get('permissions', {}).get('bulk_staff') %}
+        <button onclick="openBulkUploadStaffModal()" class="btn-primary" style="background: var(--hgt-aqua); color: var(--hgt-greyblue);">
+            <i class="fa-solid fa-upload"></i> Carga Masiva
+        </button>
+        {% endif %}
+        {% if session.get('permissions', {}).get('export_staff') %}
+        <a href="{{ url_for('staff.export_staff') }}" class="btn-primary">
+            <i class="fa-solid fa-file-excel"></i> Exportar Excel
+        </a>
+        {% endif %}
+        {% if session.get('permissions', {}).get('create_staff') %}
+        <button class="btn-primary" onclick="openModal('createStaffModal')">
+            <i class="fa-solid fa-plus"></i> Nuevo Personal
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="control-panel">
+    <div class="tabs" style="margin-bottom: 1rem; border-bottom: none;">
+        <button class="tab-link active" onclick="switchStaffTab('all', this)">Todos</button>
+    </div>
+
+    <div class="unified-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="staffSearch" placeholder="Busca por nombre, RUT, área o terminal...">
+    </div>
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-layer-group"></i> Total <strong id="totalCount">0</strong></div>
+        <div class="stat-pill"><i class="fa-solid fa-filter"></i> Filtrados <strong id="filteredCount">0</strong></div>
+    </div>
+</div>
+
+<div class="table-container datagrid-container">
+    <table class="data-table" id="staffTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre Completo</th>
+                <th>RUT</th>
+                <th>Área de Trabajo</th>
+                <th>Terminal</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in staff_list %}
+            <tr class="searchable-row" 
+                data-search="{{ s.FirstName }} {{ s.LastName }} {{ s.RUT }} {{ s.WorkArea }} {{ s.TerminalName }}">
+                <td><span style="color:var(--text-muted); font-weight:600;">{{ s.StaffID }}</span></td>
+                <td>
+                    <div style="font-weight:700; color:var(--text-main);">{{ s.FirstName }} {{ s.LastName }}</div>
+                </td>
+                <td><span class="badge-serial">{{ s.RUT }}</span></td>
+                <td>
+                    <span style="background:var(--hgt-orange-glow); color:var(--hgt-orange); padding:0.2rem 0.6rem; border-radius:6px; font-size:0.82rem; font-weight:600;">{{ s.WorkArea }}</span>
+                </td>
+                <td>
+                    <span class="status-badge warehouse"><i class="fa-solid fa-location-dot"></i> {{ s.TerminalName }}</span>
+                </td>
+                <td>
+                    {% if session.get('permissions', {}).get('edit_staff') %}
+                    <button class="btn-action btn-edit" onclick="openEditStaff({{ s.StaffID }}, '{{ s.FirstName }}', '{{ s.LastName }}', '{{ s.RUT }}', '{{ s.WorkArea }}', '{{ s.TerminalID }}')" title="Editar">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    {% endif %}
+                    {% if session.get('permissions', {}).get('delete_staff') %}
+                    <form method="POST" class="action-form" onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar este registro?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="staff_id" value="{{ s.StaffID }}">
+                        <button type="submit" class="btn-action btn-history" title="Eliminar" style="background: #dc3545;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr class="no-pag"><td colspan="6" class="empty-state"><i class="fa-solid fa-inbox"></i><p>No hay registros</p></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Create -->
+<div id="createStaffModal" class="modal">
+    <div class="modal-content">
+        <button type="button" class="modal-close-btn" onclick="closeModal('createStaffModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h2>Registrar Nuevo Personal</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Nombre</label>
+                <input type="text" name="first_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Apellido</label>
+                <input type="text" name="last_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>RUT</label>
+                <input type="text" name="rut" class="form-control" placeholder="12.345.678-9" required>
+            </div>
+            <div class="form-group">
+                <label>Área de Trabajo</label>
+                <input type="text" name="work_area" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" class="form-control" required>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit -->
+<div id="editStaffModal" class="modal">
+    <div class="modal-content">
+        <button type="button" class="modal-close-btn" onclick="closeModal('editStaffModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h2>Editar Personal</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="staff_id" id="edit_staff_id">
+            <div class="form-group">
+                <label>Nombre</label>
+                <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Apellido</label>
+                <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>RUT</label>
+                <input type="text" name="rut" id="edit_rut" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Área de Trabajo</label>
+                <input type="text" name="work_area" id="edit_work_area" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" id="edit_terminal_id" class="form-control" required>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Actualizar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk Upload Modal -->
+<div id="bulkUploadStaffModal" class="modal">
+    <div class="modal-content" style="max-width:500px;">
+        <button type="button" class="modal-close-btn" onclick="closeModal('bulkUploadStaffModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h3><i class="fa-solid fa-upload"></i> Carga Masiva de Personal</h3>
+        <p style="color: #666; margin-bottom: 1rem;">Sube un archivo Excel con el formato de la plantilla descargable.</p>
+        <form method="POST" action="{{ url_for('staff.bulk_upload_staff') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label>Archivo Excel</label>
+                <input type="file" name="file" accept=".xlsx,.xls" class="form-control" required>
+                <small style="color: #888;">Formatos soportados: .xlsx, .xls</small>
+            </div>
+            <div style="margin-top: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; font-size: 0.85rem; color: #666;">
+                <strong>Instrucciones:</strong>
+                <ul style="margin: 0.5rem 0 0 1rem; padding: 0;">
+                    <li>Descarga la plantilla primero</li>
+                    <li>El RUT debe ser único</li>
+                    <li>La columna Terminal debe coincidir exactamente con las terminales registradas</li>
+                </ul>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">
+                <i class="fa-solid fa-upload"></i> Subir y Procesar
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function openBulkUploadStaffModal() {
+    openModal('bulkUploadStaffModal');
+}
+function openEditStaff(id, fname, lname, rut, area, termId) {
+    document.getElementById('edit_staff_id').value = id;
+    document.getElementById('edit_first_name').value = fname;
+    document.getElementById('edit_last_name').value = lname;
+    document.getElementById('edit_rut').value = rut;
+    document.getElementById('edit_work_area').value = area;
+    document.getElementById('edit_terminal_id').value = termId;
+    openModal('editStaffModal');
+}
+
+let currentStaffTab = 'all';
+
+function switchStaffTab(type, btn) {
+    currentStaffTab = type;
+    btn.closest('.tabs').querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyStaffFilters();
+}
+
+function applyStaffFilters() {
+    const searchTerm = document.getElementById('staffSearch').value.toLowerCase();
+    
+    window.HGT_StaffGrid.setFilter(row => {
+        const searchMatch = row.innerText.toLowerCase().includes(searchTerm);
+        return searchMatch;
+    });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    window.HGT_StaffGrid = HGT_DataTable('staffTable', { 
+        buttons: [], // Remove Excel, PDF, Print buttons
+        onUpdate: (visible, total) => {
+            document.getElementById('totalCount').innerText = total;
+            document.getElementById('filteredCount').innerText = visible;
+        }
+    });
+
+    // Search event
+    document.getElementById('staffSearch').addEventListener('input', applyStaffFilters);
+});
+</script>
+{% endblock %}

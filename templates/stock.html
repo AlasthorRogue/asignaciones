@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-chart-pie"></i> Resumen de Stock</h1>
+    <div class="header-actions">
+        <a href="{{ url_for('stock.export_stock') }}" class="btn btn-secondary">
+            <i class="fa-solid fa-file-excel"></i> Exportar Resumen
+        </a>
+    </div>
+</div>
+
+<!-- Metrics Cards for Equipment by Terminal -->
+<div class="metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+    <div class="metric-card" style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid var(--hgt-orange);">
+        <h3 style="margin: 0 0 0.5rem 0; color: var(--hgt-greyblue); font-size: 0.9rem;">Total Equipos Asignados</h3>
+        <p style="font-size: 2rem; font-weight: 700; color: var(--hgt-orange); margin: 0;">{{ stock_data | sum(attribute='Assigned') }}</p>
+    </div>
+    <div class="metric-card" style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid var(--hgt-aqua);">
+        <h3 style="margin: 0 0 0.5rem 0; color: var(--hgt-greyblue); font-size: 0.9rem;">Terminales Activas</h3>
+        <p style="font-size: 2rem; font-weight: 700; color: var(--hgt-aqua); margin: 0;">{{ chart_data.terminals | length }}</p>
+    </div>
+    <div class="metric-card" style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid var(--hgt-greyblue);">
+        <h3 style="margin: 0 0 0.5rem 0; color: var(--hgt-greyblue); font-size: 0.9rem;">Tipos de Equipo</h3>
+        <p style="font-size: 2rem; font-weight: 700; color: var(--hgt-greyblue); margin: 0;">{{ stock_data | length }}</p>
+    </div>
+</div>
+
+<!-- Chart Section -->
+<div class="chart-container" style="background: white; padding: 2rem; border-radius: 16px; box-shadow: var(--hgt-shadow); margin-bottom: 3rem;">
+    <h2 style="margin-top: 0; color: var(--hgt-greyblue);">Equipos Asignados por Terminal</h2>
+    <div style="position: relative; height: 400px;">
+        <canvas id="terminalChart"></canvas>
+    </div>
+</div>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    // Fallback if CDN fails
+    if (typeof Chart === 'undefined') {
+        document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"><\/script>');
+    }
+</script>
+
+<!-- Second Chart: Equipment Distribution by Type -->
+<div class="chart-container" style="background: white; padding: 2rem; border-radius: 16px; box-shadow: var(--hgt-shadow); margin-bottom: 3rem;">
+    <h2 style="margin-top: 0; color: var(--hgt-greyblue);">Distribución de Equipos por Tipo</h2>
+    <div style="position: relative; height: 400px; max-width: 600px; margin: 0 auto;">
+        <canvas id="distributionChart"></canvas>
+    </div>
+</div>
+
+<script id="stock-data" type="application/json">
+    {{ stock_data | tojson }}
+</script>
+<script id="chart-data" type="application/json">
+    {{ chart_data | tojson }}
+</script>
+
+<script>
+    // Parse the JSON data securely from the script tags
+    const rawStockData = JSON.parse(document.getElementById('stock-data').textContent);
+    const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+
+    // Data for distribution chart
+    const distributionData = {
+        labels: rawStockData.map(item => item.TypeName),
+        datasets: [{
+            data: rawStockData.map(item => item.Assigned),
+            backgroundColor: ['#FF6600', '#4ecdc4', '#212A37', '#8a6b9e', '#c8b89a', '#27ae60', '#f39c12'],
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    };
+    
+    if (distributionData.labels.length > 0) {
+        const ctxDist = document.getElementById('distributionChart').getContext('2d');
+        new Chart(ctxDist, {
+            type: 'doughnut',
+            data: distributionData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                family: 'Outfit',
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(26, 42, 55, 0.9)',
+                        titleFont: {
+                            family: 'Outfit',
+                            size: 14
+                        },
+                        bodyFont: {
+                            family: 'Outfit',
+                            size: 13
+                        },
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    if (chartData && chartData.terminals && chartData.terminals.length > 0) {
+        const ctx = document.getElementById('terminalChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartData.terminals,
+                datasets: chartData.datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                family: 'Outfit',
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(26, 42, 55, 0.9)',
+                        titleFont: {
+                            family: 'Outfit',
+                            size: 14
+                        },
+                        bodyFont: {
+                            family: 'Outfit',
+                            size: 13
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: false,
+                        ticks: {
+                            font: {
+                                family: 'Outfit',
+                                size: 11
+                            }
+                        },
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            font: {
+                                family: 'Outfit',
+                                size: 11
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+
+<div class="search-container" style="margin-bottom: 2rem;">
+    <div class="form-group" style="max-width: 400px; position: relative;">
+        <i class="fa-solid fa-filter" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #666;"></i>
+        <input type="text" id="stockFilter" class="form-control" placeholder="Filtrar por tipo de dispositivo..." style="padding-left: 2.5rem;">
+    </div>
+</div>
+
+<div class="stock-grid" id="stockGrid">
+    {% for item in stock_data %}
+    <div class="stock-card" data-type="{{ item.TypeName | lower }}">
+        <div class="stock-card-header">
+            <h3>{{ item.TypeName }}</h3>
+            <span class="total-badge">{{ item.Total }}</span>
+        </div>
+        
+        <div class="stock-visual">
+            <div class="progress-labels">
+                <span>Asignado ({{ item.Assigned }})</span>
+                <span>En Bodega ({{ item.InStock }})</span>
+            </div>
+            <div class="progress-stacked">
+                {% set assigned_pct = (item.Assigned / item.Total * 100) if item.Total > 0 else 0 %}
+                {% set stock_pct = (item.InStock / item.Total * 100) if item.Total > 0 else 0 %}
+                
+                <div class="progress-bar-segment segment-assigned" data-progress="{{ assigned_pct }}" title="Asignado: {{ item.Assigned }}"></div>
+                <div class="progress-bar-segment segment-stock" data-progress="{{ stock_pct }}" title="En Bodega: {{ item.InStock }}"></div>
+            </div>
+        </div>
+        
+        <div class="stock-details">
+            <div class="stat">
+                <span class="label">Asignado</span>
+                <span class="value">{{ item.Assigned }}</span>
+            </div>
+            <div class="stat">
+                <span class="label">En Bodega</span>
+                <span class="value">{{ item.InStock }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="table-container" style="margin-top: 3rem;">
+    <h2>Detalle Consolidado</h2>
+    <table class="table" id="stockTable">
+        <thead>
+            <tr>
+                <th>Tipo de Dispositivo</th>
+                <th>Total Global</th>
+                <th>En Bodega (Stock)</th>
+                <th>Asignado a Personal</th>
+                <th>Disponibilidad %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in stock_data %}
+            <tr data-type="{{ item.TypeName | lower }}">
+                <td><strong>{{ item.TypeName }}</strong></td>
+                <td>{{ item.Total }}</td>
+                <td><span class="pill stock" style="background: var(--hgt-orange);">{{ item.InStock }}</span></td>
+                <td><span class="pill assigned" style="background: var(--hgt-aqua);">{{ item.Assigned }}</span></td>
+                <td>
+                    {% set avail = (item.InStock / item.Total * 100) if item.Total > 0 else 0 %}
+                    <span data-color="{{ 'var(--hgt-orange)' if avail > 0 else '#999' }}" style="font-weight: 600;">{{ avail | round(1) }}%</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+.stock-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.stock-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    border: 1px solid #eee;
+    transition: transform 0.2s;
+}
+
+.stock-card:hover {
+    transform: translateY(-5px);
+}
+
+.stock-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.stock-card-header h3 {
+    margin: 0;
+    color: var(--hgt-greyblue);
+}
+
+.total-badge {
+    background: #f0f0f0;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-weight: 700;
+    color: #444;
+}
+
+.progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+}
+
+.progress-stacked {
+    height: 12px;
+    background: #f0f0f0;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    margin-bottom: 1.5rem;
+}
+
+.progress-bar-segment {
+    height: 100%;
+    transition: width 0.5s ease-out;
+}
+
+.segment-assigned {
+    background: var(--hgt-aqua);
+}
+
+.segment-stock {
+    background: var(--hgt-orange);
+}
+
+.stock-details {
+    display: flex;
+    border-top: 1px solid #eee;
+    padding-top: 1rem;
+    gap: 1rem;
+}
+
+.stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.stat .label {
+    font-size: 0.75rem;
+    color: #888;
+    text-transform: uppercase;
+}
+
+.stat .value {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Aplicar estilos data-*
+    document.querySelectorAll('[data-progress]').forEach(el => {
+        el.style.width = el.getAttribute('data-progress') + '%';
+    });
+    document.querySelectorAll('span[data-color]').forEach(el => {
+        el.style.color = el.getAttribute('data-color');
+    });
+
+    const paginator = HGT_Paginate('stockTable', 10);
+
+    document.getElementById('stockFilter').addEventListener('input', function() {
+        const term = this.value.toLowerCase();
+        
+        // Filter Cards (these are outside DataTables)
+        document.querySelectorAll('.stock-card').forEach(card => {
+            const type = card.getAttribute('data-type').toLowerCase();
+            card.style.display = type.includes(term) ? '' : 'none';
+        });
+        
+        // Filter Table using DataTables API
+        paginator.applySearch(term);
+    });
+});
+</script>
+{% endblock %}

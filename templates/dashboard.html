@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard Histórico</h1>
+</div>
+
+<div class="search-container" style="margin-bottom: 1.5rem;">
+    <div class="form-group" style="max-width: 400px; position: relative;">
+        <i class="fa-solid fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #666;"></i>
+        <input type="text" id="dashboardSearch" class="form-control" placeholder="Buscar en historial..." style="padding-left: 2.5rem;">
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="dashboardTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Terminal</th>
+                <th>Acción</th>
+                <th>Tipo</th>
+                <th>Modelo</th>
+                <th>Serie</th>
+                <th>Fecha Asignación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in history %}
+            <tr class="searchable-row">
+                <td>{{ h.HistoryID }}</td>
+                <td>{{ h.Username }}</td>
+                <td>{{ h.TerminalName or 'No asignado' }}</td>
+                <td><span class="pill {{ 'admin' if h.Action == 'CREATED' else 'user' }}">{{ h.Action }}</span></td>
+                <td>{{ h.AssignmentType }}</td>
+                <td>{{ h.AssignmentModel }}</td>
+                <td>{{ h.AssignmentSerial }}</td>
+                <td>{{ h.AssignmentDate.strftime('%Y-%m-%d') if h.AssignmentDate else 'Indefinido' }}</td>
+            </tr>
+            {% else %}
+            <tr class="no-pag"><td colspan="8" style="text-align:center;">No hay registros históricos.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const paginator = HGT_Paginate('dashboardTable', 10);
+        
+        document.getElementById('dashboardSearch').addEventListener('input', function() {
+            paginator.applySearch(this.value.toLowerCase());
+        });
+    });
+</script>
+{% endblock %}

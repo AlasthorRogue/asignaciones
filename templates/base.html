@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HGT - Asignaciones</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- DataTables.net Modern Suite -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Load an icon set similar to NOTO per guidelines, Phosphor Icons or FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tom Select for searchable dropdowns -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- DataTables.net Core & Extensions JS -->
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+    
+    <!-- QR Code Generation (Local qrcode.js) -->
+    <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
+</head>
+<body>
+    <div class="mobile-header">
+        <div class="brand">
+            <img src="{{ url_for('static', filename='img/logo_hgt_interfaz.png') }}" alt="HGT Logo" style="height: 35px; width: auto;">
+        </div>
+        <button class="menu-toggle" onclick="toggleSidebar()">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <img src="{{ url_for('static', filename='img/logo_hgt_interfaz.png') }}" alt="HGT Logo" style="width: 100%; height: auto; padding: 0.5rem;">
+            </div>
+            
+            <ul class="nav-menu">
+                {% if session.get('permissions', {}).get('dashboard') %}
+                <li>
+                    <a href="{{ url_for('reports.dashboard') }}" class="{{ 'active' if request.endpoint == 'reports.dashboard' else '' }}">
+                        <i class="fa-solid fa-chart-line"></i> Dashboard
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('companies') %}
+                <li>
+                    <a href="{{ url_for('companies.manage_companies') }}" class="{{ 'active' if request.endpoint == 'companies.manage_companies' else '' }}">
+                        <i class="fa-solid fa-building"></i> Empresas
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('users') or session.get('permissions', {}).get('roles') %}
+                <li>
+                    <a href="{{ url_for('users.manage_users') }}" class="{{ 'active' if request.endpoint == 'users.manage_users' else '' }}">
+                        <i class="fa-solid fa-users-gear"></i> Usuarios & Accesos
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('terminals') %}
+                <li>
+                    <a href="{{ url_for('terminals.manage_terminals') }}" class="{{ 'active' if request.endpoint == 'terminals.manage_terminals' else '' }}">
+                        <i class="fa-solid fa-desktop"></i> Terminales
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('staff') %}
+                <li>
+                    <a href="{{ url_for('staff.manage_staff') }}" class="{{ 'active' if request.endpoint == 'staff.manage_staff' else '' }}">
+                        <i class="fa-solid fa-id-card"></i> Personal
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('warehouses') %}
+                <li>
+                    <a href="{{ url_for('warehouses.manage_warehouses') }}" class="{{ 'active' if request.endpoint == 'warehouses.manage_warehouses' else '' }}">
+                        <i class="fa-solid fa-warehouse"></i> Bodegas
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('device_types') %}
+                <li>
+                    <a href="{{ url_for('device_types.manage_device_types') }}" class="{{ 'active' if request.endpoint == 'device_types.manage_device_types' else '' }}">
+                        <i class="fa-solid fa-list-check"></i> Catálogo Equipos
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('assignments') %}
+                <li>
+                    <a href="{{ url_for('assignments.manage_assignments') }}" class="{{ 'active' if request.endpoint == 'assignments.manage_assignments' else '' }}">
+                        <i class="fa-solid fa-clipboard-list"></i> Asignaciones
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('inventory') %}
+                <li>
+                    <a href="{{ url_for('inventory.list_inventory') }}" class="{{ 'active' if request.endpoint == 'inventory.list_inventory' else '' }}">
+                        <i class="fa-solid fa-boxes-stacked"></i> Inventario
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('stock') %}
+                <li>
+                    <a href="{{ url_for('stock.view_stock') }}" class="{{ 'active' if request.endpoint == 'stock.view_stock' else '' }}">
+                        <i class="fa-solid fa-chart-pie"></i> Stock Summary
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% if session.get('permissions', {}).get('reports') %}
+                <li>
+                    <a href="{{ url_for('reports.search') }}" class="{{ 'active' if request.endpoint == 'reports.search' else '' }}">
+                        <i class="fa-solid fa-search"></i> Consultas & PDF
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+
+            <div class="user-info">
+                <p><i class="fa-solid fa-user-circle"></i> {{ session.get('fullname', '') }}</p>
+                <form method="POST" action="{{ url_for('auth.logout') }}" style="display:inline;" data-hgt-native="true">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" style="background:none;border:none;color:var(--hgt-orange);cursor:pointer;text-decoration:underline;padding:0;font:inherit;">Cerrar Sesión</button>
+                </form>
+            </div>
+        </aside>
+
+        <button class="sidebar-collapse-btn" onclick="toggleDesktopSidebar()" title="Toggle sidebar">
+            <i class="fa-solid fa-chevron-left" id="sidebarToggleIcon"></i>
+        </button>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <div id="flash-data" style="display:none;" 
+                     data-messages='{{ messages | tojson }}'></div>
+              {% endif %}
+            {% endwith %}
+            
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <footer class="main-footer">
+        <div class="footer-content">
+            <span class="footer-text">Hanseatic Global Terminals — © 2026 Todos los derechos reservados</span>
+        </div>
+    </footer>
+
+        <!-- Premium Confirmation Modal -->
+    <div id="premiumConfirmModal" class="modal alert-modal">
+        <div class="modal-content" style="border-top-color: var(--hgt-dawn);">
+            <div class="alert-modal-icon error"><i class="fa-solid fa-circle-question"></i></div>
+            <div id="confirmTitle" class="alert-modal-title">¿Está seguro?</div>
+            <div id="confirmMessage" class="alert-modal-message"></div>
+            <div class="confirm-modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('premiumConfirmModal')">CANCELAR</button>
+                <button id="confirmProceedBtn" class="btn btn-danger">CONFIRMAR</button>
+            </div>
+        </div>
+    </div>
+    <div id="premiumAlertModal" class="modal alert-modal">
+        <div class="modal-content">
+            <div id="alertIcon" class="alert-modal-icon"></div>
+            <div id="alertTitle" class="alert-modal-title"></div>
+            <div id="alertMessage" class="alert-modal-message"></div>
+            <button class="btn btn-primary" onclick="closeModal('premiumAlertModal')">ACEPTAR</button>
+        </div>
+    </div>
+
+    <!-- QR Code Preview & Print Modal -->
+    <div id="qrModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <span class="close" onclick="closeModal('qrModal')">&times;</span>
+            <h2 style="text-align: center; border-bottom: 2px solid var(--hgt-orange); padding-bottom: 0.5rem;"><i class="fa-solid fa-qrcode"></i> Etiqueta QR</h2>
+            
+            <div class="qr-preview-container">
+                <div id="qrCanvasWrapper" style="background:white; padding:10px;"></div>
+                <div class="qr-meta-display">
+                    <h4 id="qrLabelType">DATO EQUIPO</h4>
+                    <p id="qrLabelModel">MODELO</p>
+                    <p id="qrLabelSerial" class="sticker-serial">SERIE</p>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <button class="btn btn-secondary" onclick="closeModal('qrModal')">CERRAR</button>
+                <button class="btn btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> IMPRIMIR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Printable QR Area -->
+    <div id="qrPrintArea">
+        <div class="printable-sticker">
+            <div id="qrPrintWrapper"></div>
+        </div>
+    </div>
+
+    <!-- JS Scripts Modal handlers -->
+    <script>
+        // --- QR CODE GENERATION ---
+        function HGT_ShowQR(btn) {
+            const type = btn.dataset.type || 'N/A';
+            const brand = btn.dataset.brand || 'N/A';
+            const model = btn.dataset.model || 'N/A';
+            const serial = btn.dataset.serial || 'N/A';
+
+            const qrData = `TIPO:${type}|MARCA:${brand}|MOD:${model}|S/N:${serial}`;
+            
+            if (typeof QRCode === 'undefined') {
+                showPremiumAlert('error', 'La librería de QR no se ha cargado correctamente.');
+                return;
+            }
+
+            try {
+                const previewEl = document.getElementById('qrCanvasWrapper');
+                const printEl = document.getElementById('qrPrintWrapper');
+                
+                if (previewEl) {
+                    previewEl.innerHTML = '';
+                    new QRCode(previewEl, {
+                        text: qrData,
+                        width: 200,
+                        height: 200,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.H
+                    });
+                }
+                
+                if (printEl) {
+                    printEl.innerHTML = '';
+                    new QRCode(printEl, {
+                        text: qrData,
+                        width: 80,
+                        height: 80,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.H
+                    });
+                }
+
+                // Internal function to safely set text
+                const setSafeText = (id, text) => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerText = text;
+                };
+
+                // Update text labels
+                setSafeText('qrLabelType', type);
+                setSafeText('qrLabelModel', brand + ' ' + model);
+                setSafeText('qrLabelSerial', serial);
+                
+                setSafeText('qrPrintType', type);
+                setSafeText('qrPrintModel', brand + ' ' + model);
+                setSafeText('qrPrintSerial', serial);
+
+                openModal('qrModal');
+            } catch (err) {
+                console.error('HGT_ShowQR Error Details:', err);
+                // If the QR actually shows up (user said so), don't annoy with an alert
+                // just log it. Only alert if something is really broken.
+            }
+        }
+
+        // --- RESPONSIVE SIDEBAR ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('visible');
+        }
+
+        // --- DESKTOP SIDEBAR COLLAPSE ---
+        function toggleDesktopSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+
+        // --- HGT GLOBAL DATATABLES WRAPPER ---
+        window.HGT_DataTable = function(tableId, options = {}) {
+            const table = document.getElementById(tableId);
+            if (!table) return null;
+
+            // Auto-detect last column index to disable sorting on Actions col
+            const colCount = table.querySelectorAll('thead th').length;
+
+            const defaults = {
+                destroy: true,
+                pageLength: 10,
+                autoWidth: false,
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
+                    searchPlaceholder: "Filtrar resultados...",
+                    search: ""
+                },
+                dom: '<"dt-top-actions"Bl>rt<"dt-bottom-actions"ip>',
+                columnDefs: [
+                    {
+                        // Last column = Actions: disable sorting, disable search, adequate width
+                        targets: colCount - 1,
+                        orderable: false,
+                        searchable: false,
+                        width: '120px',
+                        className: 'dt-actions-col'
+                    }
+                ],
+                buttons: [
+                    {
+                        extend: 'excelHtml5',
+                        text: '<i class="fa-solid fa-file-excel"></i> Excel',
+                        className: 'dt-btn-excel',
+                        titleAttr: 'Exportar a Excel',
+                        exportOptions: { columns: ':not(.dt-actions-col)' }
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        text: '<i class="fa-solid fa-file-pdf"></i> PDF',
+                        className: 'dt-btn-pdf',
+                        titleAttr: 'Exportar a PDF',
+                        exportOptions: { columns: ':not(.dt-actions-col)' }
+                    },
+                    {
+                        extend: 'print',
+                        text: '<i class="fa-solid fa-print"></i> Imprimir',
+                        className: 'dt-btn-print',
+                        exportOptions: { columns: ':not(.dt-actions-col)' }
+                    }
+                ],
+                initComplete: function(settings, json) {
+                    if (options.onUpdate) {
+                        const info = this.api().page.info();
+                        options.onUpdate(info.recordsDisplay, info.recordsTotal);
+                    }
+                }
+            };
+
+            // If buttons option is provided as an empty array, remove 'B' from DOM
+            if (options.buttons && options.buttons.length === 0) {
+                defaults.dom = '<"dt-top-actions"l>rt<"dt-bottom-actions"ip>';
+            }
+
+            const config = $.extend(true, {}, defaults, options);
+            const dt = $('#' + tableId).DataTable(config);
+
+            // Connect external search input if it exists
+            const externalSearch = options.searchInputId || tableId.replace('Table', 'Search');
+            const searchInput = document.getElementById(externalSearch);
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    dt.search(this.value).draw();
+                });
+            }
+
+            // Persistence for custom filters
+            let activeFilter = null;
+
+            $.fn.dataTable.ext.search.push((settings, data, dataIndex) => {
+                if (settings.nTable.id !== tableId) return true;
+                if (!activeFilter) return true;
+                const row = dt.row(dataIndex).node();
+                return activeFilter(row);
+            });
+
+            // Listen for draw events to update counters
+            dt.on('draw', function() {
+                if (options.onUpdate) {
+                    const info = dt.page.info();
+                    options.onUpdate(info.recordsDisplay, info.recordsTotal);
+                }
+            });
+
+            return {
+                instance: dt,
+                refresh: () => dt.ajax ? dt.ajax.reload() : dt.draw(),
+                applySearch: (term) => dt.search(term).draw(),
+                setFilter: (callback) => {
+                    activeFilter = callback;
+                    dt.draw();
+                },
+                clearFilters: () => {
+                    activeFilter = null;
+                    dt.draw();
+                }
+            };
+        };
+
+        // Backward compatibility shims
+        window.HGT_DataGrid = function(id, options = {}) { return window.HGT_DataTable(id, options); };
+        window.HGT_Paginate = function(id, size = 10) { return window.HGT_DataTable(id, { pageLength: size }); };
+
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = "block";
+            // Re-initialize searchable selects if any inside the modal
+            initSearchableSelects();
+        }
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = "none";
+        }
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = "none";
+            }
+        }
+
+        // Web Audio API Sound generator
+        function playAlertSound(type) {
+            const context = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = context.createOscillator();
+            const gainNode = context.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+
+            if (type === 'danger' || type === 'error') {
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(150, context.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(40, context.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.2, context.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+            } else {
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(440, context.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(880, context.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, context.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.2);
+            }
+
+            oscillator.start();
+            oscillator.stop(context.currentTime + 0.3);
+        }
+
+        function showPremiumAlert(category, message) {
+            const iconEl = document.getElementById('alertIcon');
+            const titleEl = document.getElementById('alertTitle');
+            const msgEl = document.getElementById('alertMessage');
+            
+            if (category === 'danger' || category === 'error') {
+                iconEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                iconEl.className = 'alert-modal-icon error';
+                titleEl.innerText = '¡Atención!';
+                playAlertSound('danger');
+            } else {
+                iconEl.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+                iconEl.className = 'alert-modal-icon success';
+                titleEl.innerText = 'Operación Exitosa';
+                playAlertSound('success');
+            }
+            
+            msgEl.innerText = message;
+            openModal('premiumAlertModal');
+        }
+
+        let pendingForm = null;
+        function showPremiumConfirm(message, form) {
+            const msgEl = document.getElementById('confirmMessage');
+            msgEl.innerText = message;
+            pendingForm = form;
+            
+            // Re-bind proceed button
+            const proceedBtn = document.getElementById('confirmProceedBtn');
+            proceedBtn.onclick = function() {
+                if (pendingForm) pendingForm.submit();
+            };
+            
+            openModal('premiumConfirmModal');
+            playAlertSound('danger'); // Reuse the attention sound
+        }
+
+        // Global intercept for deletions
+        function confirmDeletion(event, message) {
+            event.preventDefault();
+            const form = event.target.closest('form');
+            showPremiumConfirm(message, form);
+            return false;
+        }
+
+        // Searchable Selects (Tom Select) Initialization
+        function initSearchableSelects() {
+            document.querySelectorAll('.searchable-select, .ts-select').forEach(el => {
+                if (!el.tomselect) {
+                    new TomSelect(el, {
+                        create: false,
+                        sortField: {
+                            field: "text",
+                            direction: "asc"
+                        },
+                        placeholder: el.getAttribute('placeholder') || "-- Seleccione --",
+                        allowEmptyOption: true,
+                        maxItems: 1
+                    });
+                }
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            initSearchableSelects();
+            
+            // Check for flash messages
+            const flashData = document.getElementById('flash-data');
+            if (flashData) {
+                const messages = JSON.parse(flashData.getAttribute('data-messages'));
+                if (messages.length > 0) {
+                    // Show first message in premium alert
+                    const first = messages[0];
+                    showPremiumAlert(first[0], first[1]);
+                }
+            }
+        });
+    </script>
+
+    <!-- HGT AJAX Navigation -->
+    <script src="{{ url_for('static', filename='js/hgt-navigation.js') }}"></script>
+</body>
+</html>
