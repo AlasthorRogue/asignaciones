@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-building"></i> Gestión de Empresas</h1>
+    <button class="btn btn-primary" onclick="openModal('createCompanyModal')">
+        <i class="fa-solid fa-plus"></i> Nueva Empresa
+    </button>
+</div>
+
+<div class="control-panel">
+    <div class="unified-search">
+        <i class="fa-solid fa-building"></i>
+        <input type="text" id="companiesSearch" placeholder="Busca por nombre de empresa...">
+    </div>
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-briefcase"></i> <strong id="totalCount">0</strong></div>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="companiesTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre Empresa</th>
+                <th>RUT</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for company in companies %}
+            <tr class="searchable-row">
+                <td><span style="color:var(--text-muted); font-weight:600; font-size:0.85rem;">#{{ company.CompanyID }}</span></td>
+                <td>
+                    <div style="font-weight:700; color:var(--text-main);"><i class="fa-solid fa-building" style="color:var(--hgt-orange); margin-right:0.4rem;"></i>{{ company.Name }}</div>
+                </td>
+                <td><span class="badge-serial">{{ company.RUT }}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" title="Editar" onclick="openEditModal('{{ company.CompanyID }}', '{{ company.Name }}', '{{ company.RUT }}')"><i class="fa-solid fa-pen"></i></button>
+                    <form action="{{ url_for('companies.manage_companies') }}" method="POST" class="action-form" onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar esta empresa?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="company_id" value="{{ company.CompanyID }}">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Create Modal -->
+<div id="createCompanyModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('createCompanyModal')">&times;</span>
+        <h2>Nueva Empresa</h2>
+        <form action="{{ url_for('companies.manage_companies') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Nombre de la Empresa</label>
+                <input type="text" name="name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>RUT</label>
+                <input type="text" name="rut" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editCompanyModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('editCompanyModal')">&times;</span>
+        <h2>Editar Empresa</h2>
+        <form action="{{ url_for('companies.manage_companies') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="company_id" id="edit_company_id">
+            <div class="form-group">
+                <label>Nombre de la Empresa</label>
+                <input type="text" name="name" id="edit_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>RUT</label>
+                <input type="text" name="rut" id="edit_rut" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Actualizar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openEditModal(id, name, rut) {
+        document.getElementById('edit_company_id').value = id;
+        document.getElementById('edit_name').value = name;
+        document.getElementById('edit_rut').value = rut;
+        openModal('editCompanyModal');
+    }
+
+    // Pagination & Search
+    document.addEventListener("DOMContentLoaded", function() {
+        const grid = HGT_DataTable('companiesTable', { 
+            onUpdate: (visible, total) => {
+                document.getElementById('totalCount').innerText = total;
+            }
+        });
+    });
+</script>
+{% endblock %}

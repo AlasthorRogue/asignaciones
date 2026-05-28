@@ -1,0 +1,43 @@
+# Environment
+.env
+.env.local
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Flask instance & server-side sessions
+instance/
+flask_session/
+
+# Bases de datos locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos generados en runtime (PDFs y uploads)
+static/reports/
+static/uploads/
+
+# Logs
+*.log
+logs/
+
+# Archivos de desarrollo
+scratch/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+
+# Claude Code
+.claude/

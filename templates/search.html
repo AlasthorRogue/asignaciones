@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        background: var(--hgt-greyblue);
+        color: white;
+        margin: -2rem -2rem 1.5rem -2rem;
+    }
+    .page-header h1 { margin: 0; font-size: 1.75rem; color: white; }
+    .page-header h1 i { color: var(--hgt-orange); margin-right: 0.5rem; }
+    
+    .search-card {
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: var(--hgt-shadow);
+        margin-top: 1rem;
+        border: 1px solid var(--hgt-border);
+    }
+</style>
+
+<div class="page-header">
+    <h1><i class="fa-solid fa-file-invoice"></i> Consultas y Generación PDF</h1>
+</div>
+
+<div class="search-card" style="margin-bottom: 2rem;">
+    <h3 style="margin-top:0; margin-bottom:1rem; color:var(--hgt-greyblue);"><i class="fa-solid fa-user-magnifying-glass"></i> Seleccione Personal</h3>
+    <form method="GET" action="{{ url_for('reports.search') }}" style="display: flex; gap: 1rem; align-items: flex-end;">
+        <div class="form-group" style="flex-grow: 1; margin: 0;">
+            <select name="staff_id" class="ts-select" required>
+                <option value="">-- Seleccione Persona --</option>
+                {% for s in staff_members %}
+                <option value="{{ s.StaffID }}" {% if selected_staff == s.StaffID %}selected{% endif %}>{{ s.FirstName }} {{ s.LastName }} ({{ s.RUT }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="height: 42px;"><i class="fa-solid fa-magnifying-glass" style="margin-right: 0.5rem;"></i> BUSCAR</button>
+    </form>
+</div>
+
+{% if staff_data %}
+<div class="dashboard-grid">
+    <div class="card">
+        <div class="card-title">Datos del Personal</div>
+        <p><strong>Nombre:</strong> {{ staff_data.FirstName }} {{ staff_data.LastName }}</p>
+        <p><strong>RUT:</strong> {{ staff_data.RUT }}</p>
+        <p><strong>Área:</strong> {{ staff_data.WorkArea }}</p>
+    </div>
+    <div class="card">
+        <div class="card-title">Terminal Asociado</div>
+        <p><strong>Terminal:</strong> {{ staff_data.TerminalName or 'N/A' }}</p>
+        <p><strong>Ubicación:</strong> {{ staff_data.Location or 'N/A' }}</p>
+    </div>
+</div>
+
+{% for company_name, company_assignments in assignments|groupby('CompanyName') %}
+<div class="card" style="margin-top: 2rem;">
+    <div class="card-title" style="display: flex; justify-content: space-between;">
+        <span><i class="fa-solid fa-building"></i> {{ company_name or 'HGT' }}</span>
+        <a href="{{ url_for('reports.generate_pdf', staff_id=staff_data.StaffID, company_id=company_assignments[0].CompanyID) }}" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-file-pdf"></i> Generar Acta (Todos)
+        </a>
+    </div>
+    
+    <div class="table-container" style="margin-top: 1rem;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Equipo</th>
+                    <th>Serie</th>
+                    <th>Tipo Activo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in company_assignments %}
+                <tr>
+                    <td><strong>{{ a.Type }}</strong> {{ a.Brand }}<br>{{ a.Model }}</td>
+                    <td>{{ a.Serial }}</td>
+                    <td>{{ a.AssetType }}</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm" onclick="HGT_ShowQR(this)" 
+                                data-type="{{ a.Type }}" data-brand="{{ a.Brand }}" 
+                                data-model="{{ a.Model }}" data-serial="{{ a.Serial }}" title="Ver QR">
+                            <i class="fa-solid fa-qrcode"></i>
+                        </button>
+                        <a href="{{ url_for('reports.generate_pdf', staff_id=staff_data.StaffID, company_id=a.CompanyID, assignment_id=a.AssignmentID) }}" class="btn btn-primary btn-sm" title="Generar Acta Individual">
+                            <i class="fa-solid fa-file-pdf"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="margin-top: 2rem; text-align: center; padding: 2rem;">
+    <p>No tiene equipos registrados aún.</p>
+</div>
+{% endfor %}
+{% elif selected_staff %}
+<div class="alert alert-error">Personal no encontrado o sin datos.</div>
+{% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const style = document.createElement('style');
+        style.textContent = `
+            .ts-control { padding-left: 35px !important; position: relative; }
+            .ts-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--hgt-orange); pointer-events: none; z-index: 10; }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize TomSelect for searchable dropdowns
+        document.querySelectorAll('.ts-select').forEach(el => {
+            new TomSelect(el, {
+                create: false,
+                sortField: { field: "text", order: "asc" },
+                placeholder: 'Escriba para buscar personal...',
+                preload: false,
+                minCharacters: 1,
+                onDropdownOpen: function() {
+                    if (!this.controlInput.value.trim().length) {
+                        this.close();
+                    }
+                },
+                onType: function(str) {
+                    if (!str.trim().length) {
+                        this.close();
+                    }
+                }
+            });
+        });
+        
+        // Add search icon to make it look like a search box
+        document.querySelectorAll('.ts-control').forEach(control => {
+            if (!control.querySelector('.ts-search-icon')) {
+                const icon = document.createElement('i');
+                icon.className = 'fa-solid fa-magnifying-glass ts-search-icon';
+                control.insertBefore(icon, control.firstChild);
+            }
+        });
+    });
+</script>
+{% endblock %}

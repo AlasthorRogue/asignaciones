@@ -1,0 +1,489 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-users-gear"></i> Gestión de Accesos</h1>
+    <div class="header-actions">
+        {% if session.get('permissions', {}).get('create_user') %}
+        <button class="btn btn-primary" onclick="openModal('createUserModal')"><i class="fa-solid fa-user-plus"></i> Nuevo Usuario</button>
+        {% endif %}
+        {% if session.get('permissions', {}).get('create_role') %}
+        <button class="btn btn-secondary" onclick="openModal('createRoleModal')"><i class="fa-solid fa-shield-halved"></i> Nuevo Rol</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="control-panel" style="margin-bottom: 0; border-bottom: none; border-radius: 12px 12px 0 0;">
+    <div class="tabs" style="margin-bottom: 0; border-bottom: none;">
+        <button class="tab-link active" onclick="switchMainTab('users', this)"><i class="fa-solid fa-users"></i> Usuarios</button>
+        <button class="tab-link" onclick="switchMainTab('roles', this)"><i class="fa-solid fa-user-shield"></i> Roles & Permisos</button>
+    </div>
+</div>
+
+<div id="usersSection" class="tab-content-main active">
+    <div class="control-panel" style="border-top: none; border-radius: 0 0 12px 12px;">
+        <div class="unified-search">
+            <i class="fa-solid fa-search"></i>
+            <input type="text" id="usersSearch" placeholder="Busca por nombre, rol o terminal...">
+        </div>
+        <div class="panel-stats">
+            <div class="stat-pill"><i class="fa-solid fa-user-shield"></i> Usuarios <strong id="totalCount">0</strong></div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="table" id="usersTable">
+            <thead>
+                <tr>
+                    <th>Nombre Completo</th>
+                    <th>Usuario (Login)</th>
+                    <th>Rol</th>
+                    <th>Terminal Asignado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr class="searchable-row">
+                    <td>
+                        <div style="font-weight:700; color:var(--text-main);">{{ u.FullName }}</div>
+                        <small style="color:var(--text-muted);">{{ u.Username }}</small>
+                    </td>
+                    <td><code class="badge-serial">{{ u.Username }}</code></td>
+                    <td><span class="pill {{ 'admin' if u.Role == 'ADMIN' else 'user' }}"><i class="fa-solid {{ 'fa-crown' if u.Role == 'ADMIN' else 'fa-user' }}"></i> {{ u.Role }}</span></td>
+                    <td>
+                        {% if u.TerminalName %}
+                            <span class="status-badge warehouse"><i class="fa-solid fa-location-dot"></i> {{ u.TerminalName }}</span>
+                        {% else %}
+                            <span style="color:var(--text-muted); font-style:italic;">Sin terminal</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if session.get('permissions', {}).get('edit_user') %}
+                        <button class="btn btn-secondary btn-sm" title="Editar" onclick="openEditModal({{ u.UserID }}, '{{ u.FullName }}', '{{ u.RoleID }}', '{{ u.TerminalID or '' }}')"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-info btn-sm" title="Cambiar Contraseña" onclick="openPasswordModal({{ u.UserID }}, '{{ u.Username }}')"><i class="fa-solid fa-key"></i></button>
+                        {% endif %}
+                        {% if session.get('permissions', {}).get('delete_user') %}
+                        <form method="POST" class="action-form" onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar este usuario?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="user_id" value="{{ u.UserID }}">
+                            <button type="submit" class="btn btn-danger btn-sm" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="rolesSection" class="tab-content-main" style="display:none;">
+    <div class="table-container" style="margin-top: 1rem;">
+        <table class="table" id="rolesTable">
+            <thead>
+                <tr>
+                    <th style="width: 200px;">Rol</th>
+                    <th>Accesos al Menú</th>
+                    <th style="width: 100px;">Eliminar</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in roles %}
+                <tr>
+                    <td>
+                        <div style="font-weight:700; color:var(--text-main); font-size: 1.1rem;">{{ r.RoleName }}</div>
+                        <small class="badge-serial">ID #{{ r.RoleID }}</small>
+                    </td>
+                    <td>
+                        <form method="POST" class="perm-form-container">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="action" value="update_permissions">
+                            <input type="hidden" name="role_id" value="{{ r.RoleID }}">
+                            
+                            <div class="perm-scroll-area">
+                                {% set role_perms = permissions.get(r.RoleID, {}) %}
+                                {% set perm_groups = [
+                                    ('General / Menú', ['dashboard', 'reports']),
+                                    ('Asignaciones', ['assignments', 'create_assignment', 'edit_assignment', 'delete_assignments', 'upload_document', 'view_document']),
+                                    ('Inventario', ['inventory', 'create_inventory', 'edit_inventory', 'delete_inventory', 'bulk_inventory', 'export_inventory', 'view_history', 'view_qr']),
+                                    ('Personal', ['staff', 'create_staff', 'edit_staff', 'delete_staff', 'bulk_staff', 'export_staff']),
+                                    ('Configuración Base', ['companies', 'create_company', 'edit_company', 'delete_company', 
+                                                           'terminals', 'create_terminal', 'edit_terminal', 'delete_terminal',
+                                                           'warehouses', 'create_warehouse', 'edit_warehouse', 'delete_warehouse',
+                                                           'device_types', 'create_device_type', 'edit_device_type', 'delete_device_type',
+                                                           'stock', 'edit_stock']),
+                                    ('Seguridad', ['users', 'create_user', 'edit_user', 'delete_user', 'roles', 'create_role', 'delete_role'])
+                                ] %}
+                                {% set perm_labels = {
+                                    'dashboard': 'Panel Principal',
+                                    'reports': 'Informes / PDF',
+                                    'assignments': 'Ver Asignaciones',
+                                    'create_assignment': 'Crear Asignación',
+                                    'edit_assignment': 'Editar Asignación',
+                                    'delete_assignments': 'Eliminar Asig.',
+                                    'upload_document': 'Subir PDF',
+                                    'view_document': 'Ver/Descargar PDF',
+                                    'inventory': 'Ver Inventario',
+                                    'create_inventory': 'Crear Item',
+                                    'edit_inventory': 'Editar Item',
+                                    'delete_inventory': 'Eliminar Item',
+                                    'bulk_inventory': 'Carga Masiva',
+                                    'export_inventory': 'Exportar Excel',
+                                    'view_history': 'Ver Historial',
+                                    'view_qr': 'Ver QR',
+                                    'staff': 'Ver Personal',
+                                    'create_staff': 'Crear Personal',
+                                    'edit_staff': 'Editar Personal',
+                                    'delete_staff': 'Eliminar Personal',
+                                    'bulk_staff': 'Carga Masiva',
+                                    'export_staff': 'Exportar Excel',
+                                    'companies': 'Ver Empresas',
+                                    'create_company': 'Crear Empresa',
+                                    'edit_company': 'Editar Empresa',
+                                    'delete_company': 'Eliminar Emp.',
+                                    'terminals': 'Ver Terminales',
+                                    'create_terminal': 'Crear Terminal',
+                                    'edit_terminal': 'Editar Terminal',
+                                    'delete_terminal': 'Eliminar Term.',
+                                    'warehouses': 'Ver Bodegas',
+                                    'create_warehouse': 'Crear Bodega',
+                                    'edit_warehouse': 'Editar Bodega',
+                                    'delete_warehouse': 'Eliminar Bod.',
+                                    'device_types': 'Ver Tipos Eq.',
+                                    'create_device_type': 'Crear Tipo',
+                                    'edit_device_type': 'Editar Tipo',
+                                    'delete_device_type': 'Eliminar Tipo',
+                                    'stock': 'Ver Stock',
+                                    'edit_stock': 'Editar Stock',
+                                    'users': 'Ver Usuarios',
+                                    'create_user': 'Crear Usuario',
+                                    'edit_user': 'Editar Usuario',
+                                    'delete_user': 'Eliminar Usuario',
+                                    'roles': 'Ver Roles',
+                                    'create_role': 'Crear Rol',
+                                    'delete_role': 'Eliminar Rol'
+                                } %}
+                                <div class="perm-groups-container">
+                                    {% for group_name, keys in perm_groups %}
+                                    <div class="perm-group">
+                                        <div class="perm-group-header">{{ group_name }}</div>
+                                        <div class="permissions-grid">
+                                            {% for key in keys %}
+                                            <label class="perm-label">
+                                                <input type="checkbox" name="perm_{{ key }}" {{ 'checked' if role_perms.get(key) else '' }}>
+                                                <span>{{ perm_labels[key] }}</span>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="perm-actions">
+                                <button type="submit" class="btn-hgt-save">
+                                    <i class="fa-solid fa-save"></i> Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
+                    </td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        {% if r.RoleName != 'ADMIN' and session.get('permissions', {}).get('delete_role') %}
+                        <form method="POST" class="action-form" onsubmit="return confirm('¿Eliminar este rol?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="action" value="delete_role">
+                            <input type="hidden" name="role_id" value="{{ r.RoleID }}">
+                            <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Create User -->
+<div id="createUserModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('createUserModal')">&times;</span>
+        <h2><i class="fa-solid fa-user-plus"></i> Crear Usuario</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Usuario (Login)</label>
+                <input type="text" name="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Nombre Completo</label>
+                <input type="text" name="fullname" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" class="form-control">
+                    <option value="">-- Ninguno --</option>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Rol</label>
+                <select name="role_id" class="form-control" required>
+                    <option value="">-- Seleccionar Rol --</option>
+                    {% for r in roles %}
+                    <option value="{{ r.RoleID }}">{{ r.RoleName }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar Usuario</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit User -->
+<div id="editUserModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('editUserModal')">&times;</span>
+        <h2><i class="fa-solid fa-user-pen"></i> Editar Usuario</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="user_id" id="edit_user_id">
+            <div class="form-group">
+                <label>Nombre Completo</label>
+                <input type="text" name="fullname" id="edit_fullname" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" id="edit_terminal" class="form-control">
+                    <option value="">-- Ninguno --</option>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Rol</label>
+                <select name="role_id" id="edit_role" class="form-control" required>
+                    {% for r in roles %}
+                    <option value="{{ r.RoleID }}">{{ r.RoleName }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Actualizar Usuario</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Change Password -->
+<div id="changePasswordModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <span class="close" onclick="closeModal('changePasswordModal')">&times;</span>
+        <h2><i class="fa-solid fa-key"></i> Cambiar Contraseña</h2>
+        <p style="margin-bottom: 1rem; color: var(--text-muted);" id="passwordModalUser"></p>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="change_password">
+            <input type="hidden" name="user_id" id="password_user_id">
+            <div class="form-group">
+                <label>Nueva Contraseña</label>
+                <input type="password" name="new_password" class="form-control" required
+                       minlength="8" maxlength="128"
+                       placeholder="Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo">
+                <small style="color: var(--text-muted); display: block; margin-top: 4px;">
+                    <i class="fa-solid fa-circle-info"></i>
+                    Mínimo 8 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.
+                </small>
+            </div>
+            <div class="form-group">
+                <label>Confirmar Contraseña</label>
+                <input type="password" name="confirm_password" class="form-control" required
+                       placeholder="Repita la nueva contraseña">
+            </div>
+            <button type="submit" class="btn btn-primary">Cambiar Contraseña</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Create Role -->
+<div id="createRoleModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <span class="close" onclick="closeModal('createRoleModal')">&times;</span>
+        <h2><i class="fa-solid fa-shield-halved"></i> Crear Nuevo Rol</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create_role">
+            <div class="form-group">
+                <label>Nombre del Rol</label>
+                <input type="text" name="role_name" class="form-control" placeholder="Ej: AUDITOR" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Crear Rol</button>
+        </form>
+    </div>
+</div>
+
+<style>
+    .tab-content-main { display: none; }
+    .tab-content-main.active { display: block; }
+    
+    .perm-form-container {
+        display: flex;
+        align-items: stretch;
+        gap: 15px;
+        background: #ffffff;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid var(--hgt-border);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .perm-scroll-area {
+        flex: 1;
+        padding-right: 10px;
+    }
+    .perm-groups-container {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    .perm-group {
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 8px;
+        background: #fcfcfc;
+    }
+    .perm-group-header {
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: var(--hgt-greyblue);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .permissions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 4px;
+    }
+    .perm-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        padding: 4px 6px;
+        transition: var(--transition);
+        white-space: nowrap;
+        border-radius: 4px;
+        color: var(--text-muted);
+    }
+    .perm-label:hover { 
+        background: var(--hgt-orange-glow); 
+        color: var(--hgt-orange);
+    }
+    .perm-label input { accent-color: var(--hgt-orange); }
+    
+    .perm-actions {
+        border-left: 2px solid var(--hgt-slate);
+        padding-left: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .btn-hgt-save {
+        background-color: var(--hgt-aqua);
+        color: white;
+        border: none;
+        padding: 12px 15px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 4px 6px rgba(78, 205, 196, 0.2);
+    }
+    .btn-hgt-save:hover {
+        background-color: var(--hgt-aqua-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(78, 205, 196, 0.3);
+    }
+    .header-actions { display: flex; gap: 10px; }
+    .btn-info {
+        background-color: #17a2b8;
+        color: white;
+        border: none;
+    }
+    .btn-info:hover {
+        background-color: #138496;
+        color: white;
+    }
+</style>
+
+<script>
+    function switchMainTab(tab, btn) {
+        document.querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.tab-content-main').forEach(c => c.style.display = 'none');
+        const activeSection = document.getElementById(tab + 'Section');
+        activeSection.style.display = 'block';
+        
+        // Redraw DataTables to fix header alignment in hidden tabs
+        if (window.HGT_UsersGrid) window.HGT_UsersGrid.instance.columns.adjust();
+        if (window.HGT_RolesGrid) window.HGT_RolesGrid.instance.columns.adjust();
+    }
+
+    function openEditModal(id, fullname, roleId, terminal_id) {
+        document.getElementById('edit_user_id').value = id;
+        document.getElementById('edit_fullname').value = fullname;
+        document.getElementById('edit_role').value = roleId;
+        document.getElementById('edit_terminal').value = terminal_id;
+        openModal('editUserModal');
+    }
+
+    function openPasswordModal(userId, username) {
+        document.getElementById('password_user_id').value = userId;
+        document.getElementById('passwordModalUser').textContent = 'Usuario: ' + username;
+        document.getElementById('passwordModalUser').innerHTML = '<i class="fa-solid fa-user"></i> ' + username;
+        openModal('changePasswordModal');
+    }
+
+    // Client-side password match validation
+    document.addEventListener('submit', function(e) {
+        var form = e.target;
+        if (form.querySelector('[name="action"]') && form.querySelector('[name="action"]').value === 'change_password') {
+            var pw = form.querySelector('[name="new_password"]');
+            var confirm = form.querySelector('[name="confirm_password"]');
+            if (pw && confirm && pw.value !== confirm.value) {
+                e.preventDefault();
+                alert('Las contraseñas no coinciden.');
+            }
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", function() {
+        window.HGT_UsersGrid = HGT_DataTable('usersTable', { 
+            onUpdate: (visible, total) => {
+                document.getElementById('totalCount').innerText = total;
+            }
+        });
+        window.HGT_RolesGrid = HGT_DataTable('rolesTable', { 
+            pageLength: 5,
+            order: [[0, 'asc']]
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1>Administración de Terminales</h1>
+    <button class="btn btn-primary" onclick="openModal('createTerminalModal')"><i class="fa-solid fa-plus"></i> Nuevo Terminal</button>
+</div>
+
+<div class="control-panel">
+    <div class="unified-search">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <input type="text" id="terminalsSearch" placeholder="Busca por nombre o ubicación...">
+    </div>
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-tower-broadcast"></i> Terminales <strong id="totalCount">0</strong></div>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="terminalsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre de Terminal</th>
+                <th>Ubicación</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in terminals %}
+            <tr class="searchable-row">
+                <td><span style="color:var(--text-muted); font-weight:600; font-size:0.85rem;">#{{ t.TerminalID }}</span></td>
+                <td>
+                    <div style="font-weight:700; color:var(--text-main);"><i class="fa-solid fa-tower-broadcast" style="color:var(--hgt-orange); margin-right:0.4rem;"></i>{{ t.Name }}</div>
+                </td>
+                <td>
+                    <span class="status-badge warehouse"><i class="fa-solid fa-map-location-dot"></i> {{ t.Location }}</span>
+                </td>
+                <td>
+                    <button class="btn btn-secondary btn-sm" title="Editar"
+                            data-id="{{ t.TerminalID }}" 
+                            data-name="{{ t.Name }}" 
+                            data-location="{{ t.Location }}" 
+                            onclick="HGT_OpenEditTerminal(this)"><i class="fa-solid fa-pen"></i></button>
+                    <form method="POST" class="action-form" onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar este terminal?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="terminal_id" value="{{ t.TerminalID }}">
+                        <button type="submit" class="btn btn-danger btn-sm" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Create -->
+<div id="createTerminalModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('createTerminalModal')">&times;</span>
+        <h2>Crear Terminal</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Nombre de Terminal</label>
+                <input type="text" name="name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Ubicación</label>
+                <input type="text" name="location" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit -->
+<div id="editTerminalModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('editTerminalModal')">&times;</span>
+        <h2>Editar Terminal</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="terminal_id" id="edit_term_id">
+            <div class="form-group">
+                <label>Nombre de Terminal</label>
+                <input type="text" name="name" id="edit_term_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Ubicación</label>
+                <input type="text" name="location" id="edit_term_loc" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Actualizar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function HGT_OpenEditTerminal(btn) {
+    const ds = btn.dataset;
+    openEditTheme(ds.id, ds.name, ds.location);
+}
+
+function openEditTheme(id, name, loc) {
+    document.getElementById('edit_term_id').value = id;
+    document.getElementById('edit_term_name').value = name;
+    document.getElementById('edit_term_loc').value = loc;
+    openModal('editTerminalModal');
+}
+
+// Pagination & Search
+document.addEventListener("DOMContentLoaded", function() {
+    const grid = HGT_DataTable('terminalsTable', { 
+        onUpdate: (visible, total) => {
+            document.getElementById('totalCount').innerText = total;
+        }
+    });
+});
+</script>
+{% endblock %}
