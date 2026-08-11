@@ -1,0 +1,688 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        background: var(--hgt-greyblue);
+        color: white;
+        margin: -2rem -2rem 1.5rem -2rem;
+    }
+    .page-header h1 { margin: 0; font-size: 1.75rem; color: white; }
+    .page-header h1 i { color: var(--hgt-orange); margin-right: 0.5rem; }
+</style>
+
+<div class="page-header">
+    <h1><i class="fa-solid fa-clipboard-list"></i> Asignaciones de Equipo</h1>
+    {% if session.get('permissions', {}).get('create_assignment') %}
+    <button class="btn btn-primary" onclick="openModal('createAssignmentModal')"><i class="fa-solid fa-plus"></i> Nueva Asignación</button>
+    {% endif %}
+</div>
+
+<div class="control-panel">
+    <div class="tabs" style="margin-bottom: 0; border-bottom: none;">
+        <button class="tab-link active" onclick="filterAssignments('all', this)">Todas</button>
+        <button class="tab-link" onclick="filterAssignments('temporary', this)">Temporales</button>
+        <button class="tab-link" onclick="filterAssignments('overdue', this)">Vencidas</button>
+    </div>
+    
+    <div class="unified-search">
+        <i class="fa-solid fa-clipboard-check"></i>
+        <input type="text" id="assignmentsSearch" placeholder="Busca por serie, equipo, personal o empresa...">
+    </div>
+    
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-list-check"></i> <strong id="totalCount">0</strong></div>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="assignmentsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Personal Asignado</th>
+                <th>Equipo</th>
+                <th>Serie</th>
+                <th>Vencimiento / Estado</th>
+                <th>Empresa</th>
+                <th>Terminal</th>
+                <th>Tipo Activo</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in assignments %}
+            {% set is_overdue = a.IsTemporary and a.ExpectedReturnDate and a.ExpectedReturnDate < now %}
+            <tr class="searchable-row" 
+                data-search="{{ a.FullName }} {{ a.Type }} {{ a.Model }} {{ a.Serial }} {{ a.CompanyName }} {{ a.AssetType }} {{ a.TerminalName }}"
+                data-is-temp="{{ '1' if a.IsTemporary else '0' }}" 
+                data-is-overdue="{{ '1' if is_overdue else '0' }}"
+                data-terminal-id="{{ a.TerminalID or '' }}"
+                data-warehouse-id="{{ a.WarehouseID or '' }}">
+                <td>{{ a.AssignmentID }}</td>
+                <td>{{ a.FullName }}</td>
+                <td><strong>{{ a.Type }}</strong> {{ a.Brand }} {{ a.Model }}</td>
+                <td><span class="badge-serial">{{ a.Serial }}</span></td>
+                <td>
+                    {% if a.IsTemporary %}
+                        {% if a.ExpectedReturnDate %}
+                            {% if is_overdue %}
+                                <span class="status-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i> VENCIDA<br><small>{{ a.ExpectedReturnDate.strftime('%d/%m/%Y') }}</small></span>
+                            {% else %}
+                                <span class="status-badge temporary"><i class="fa-solid fa-clock"></i> TEMPORAL<br><small>Devolver: {{ a.ExpectedReturnDate.strftime('%d/%m/%Y') }}</small></span>
+                            {% endif %}
+                        {% else %}
+                            <span class="status-badge temporary"><i class="fa-solid fa-clock"></i> TEMPORAL</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="status-badge assigned"><i class="fa-solid fa-infinity"></i> INDEFINIDA</span>
+                    {% endif %}
+                </td>
+                <td>{{ a.CompanyName or 'HGT' }}</td>
+                <td><span class="status-badge warehouse"><i class="fa-solid fa-location-dot"></i> {{ a.TerminalName or 'N/A' }}</span></td>
+                <td>{{ a.AssetType }}</td>
+                <td>
+                    {% if session.get('permissions', {}).get('view_qr') %}
+                    <button class="btn btn-secondary btn-sm" onclick="HGT_ShowQR(this)" 
+                            data-type="{{ a.Type }}" data-brand="{{ a.Brand }}" 
+                            data-model="{{ a.Model }}" data-serial="{{ a.Serial }}" title="Ver QR">
+                        <i class="fa-solid fa-qrcode"></i>
+                    </button>
+                    {% endif %}
+                    {% if a.SignedDocumentPath %}
+                        {% if session.get('permissions', {}).get('view_document') %}
+                        <a href="{{ url_for('assignments.view_document', assignment_id=a.AssignmentID) }}" target="_blank" class="btn btn-secondary btn-sm" title="Ver PDF"><i class="fa-solid fa-file-pdf"></i></a>
+                        {% endif %}
+                        {% if session.get('permissions', {}).get('upload_document') %}
+                        <button class="btn btn-secondary btn-sm" onclick="openUploadModal('{{ a.AssignmentID }}')" title="Reemplazar PDF"><i class="fa-solid fa-upload"></i></button>
+                        {% endif %}
+                    {% else %}
+                        {% if session.get('permissions', {}).get('upload_document') %}
+                        <button class="btn btn-secondary btn-sm" onclick="openUploadModal('{{ a.AssignmentID }}')" title="Subir PDF Firmado"><i class="fa-solid fa-file-upload"></i></button>
+                        {% endif %}
+                    {% endif %}
+                    
+                    {% if session.get('permissions', {}).get('edit_assignment') %}
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="HGT_OpenEditAssignment({{ a.AssignmentID }})"
+                            title="Editar"><i class="fa-solid fa-pen"></i></button>
+                    {% endif %}
+
+                    {% if session.get('permissions', {}).get('delete_assignments') %}
+                    <form method="POST" class="action-form" onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar esta asignación?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="assignment_id" value="{{ a.AssignmentID }}">
+                        <button type="submit" class="btn btn-danger btn-sm" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Create -->
+<div id="createAssignmentModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('createAssignmentModal')">&times;</span>
+        <h2>Nueva Asignación</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            
+            <div class="tabs" style="margin-bottom: 1rem;">
+                <button type="button" class="tab-link active" onclick="switchAssignType(this, 'person', 'create')">A Funcionario</button>
+                <button type="button" class="tab-link" onclick="switchAssignType(this, 'warehouse', 'create')">A Bodega</button>
+            </div>
+
+            <div class="form-group" id="staff_group_create">
+                <label>Funcionario</label>
+                <select name="staff_id" id="staff_id_create" class="ts-select">
+                    <option value="">-- Seleccionar Funcionario --</option>
+                    {% for s in staff %}
+                    <option value="{{ s.StaffID }}" data-terminal="{{ s.TerminalID }}">
+                        {{ s.FirstName }} {{ s.LastName }} ({{ s.RUT }}) - Base: {{ s.TerminalName or 'N/A' }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" id="warehouse_group_create" style="display:none;">
+                <label>Bodega Destino</label>
+                <select name="warehouse_id" id="warehouse_id_create" class="ts-select">
+                    <option value="">-- Seleccionar Bodega --</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.WarehouseID }}" data-terminal="{{ w.TerminalID }}">{{ w.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Empresa</label>
+                <select name="company_id" class="form-control">
+                    {% for c in companies %}
+                    <option value="{{ c.CompanyID }}">{{ c.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" id="terminal_filter_group_create">
+                <label>Terminal / Base</label>
+                <select id="terminal_select_create" name="terminal_id" class="form-control" onchange="filterOptionsByTerminal('create')" required>
+                    <option value="">-- Seleccionar Terminal --</option>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Equipo</label>
+                <select name="device_type_id" class="ts-select" required>
+                    <option value="">-- Seleccionar Equipo --</option>
+                    {% for dt in device_types %}
+                    <option value="{{ dt.DeviceTypeID }}">{{ dt.Type }} {{ dt.Brand }} {{ dt.Model }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Número de Serie</label>
+                <input type="text" name="serial" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Tipo Activo</label>
+                <select name="asset_type" class="form-control">
+                    <option value="FIJO">FIJO</option>
+                    <option value="LEASING">LEASING</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Fecha de Asignación</label>
+                <input type="date" name="date" class="form-control" value="{{ now.strftime('%Y-%m-%d') }}">
+                <small style="color:var(--text-muted);">Por defecto se tomará el día de hoy.</small>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="is_mobile" id="is_mobile_create" onchange="toggleMobileFields('create')">
+                    ¿Es un equipo móvil (Celular/Tablet)?
+                </label>
+            </div>
+
+            <div id="mobile_fields_create" style="display:none; background:var(--hgt-slate); padding:1rem; border-radius:8px; margin-bottom:1rem; border-left:4px solid var(--hgt-orange);">
+                <div class="form-group">
+                    <label>Compañía Telefónica</label>
+                    <select name="mobile_company" class="form-control">
+                        <option value="">-- Seleccionar --</option>
+                        <option value="ENTEL">ENTEL</option>
+                        <option value="MOVISTAR">MOVISTAR</option>
+                        <option value="CLARO">CLARO</option>
+                        <option value="WOM">WOM</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Número de Línea</label>
+                    <input type="text" name="mobile_number" class="form-control" placeholder="+569...">
+                </div>
+                <div class="form-group">
+                    <label>Número Serie SIM</label>
+                    <input type="text" name="mobile_sim" class="form-control" placeholder="Número de serie de la SIM">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="is_temporary" onchange="document.getElementById('return_date_create').style.display = this.checked ? 'block' : 'none'">
+                    ¿Es asignación temporal?
+                </label>
+            </div>
+            <div class="form-group" id="return_date_create" style="display:none;">
+                <label>Fecha de Devolución</label>
+                <input type="date" name="expected_return_date" class="form-control">
+            </div>
+
+            <button type="submit" class="btn btn-primary">Crear Asignación</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit -->
+<div id="editAssignmentModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('editAssignmentModal')">&times;</span>
+        <h2>Editar Asignación</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="assignment_id" id="edit_assignment_id">
+            
+            <div class="tabs" style="margin-bottom: 1rem;">
+                <button type="button" id="tab_edit_person" class="tab-link active" onclick="switchAssignType(this, 'person', 'edit')">A Funcionario</button>
+                <button type="button" id="tab_edit_warehouse" class="tab-link" onclick="switchAssignType(this, 'warehouse', 'edit')">A Bodega</button>
+            </div>
+
+            <div class="form-group" id="staff_group_edit">
+                <label>Funcionario</label>
+                <select name="staff_id" id="edit_staff_id" class="ts-select">
+                    <option value="">-- Seleccionar Funcionario --</option>
+                    {% for s in staff %}
+                    <option value="{{ s.StaffID }}" data-terminal="{{ s.TerminalID }}">
+                        {{ s.FirstName }} {{ s.LastName }} ({{ s.RUT }}) - Base: {{ s.TerminalName or 'N/A' }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" id="warehouse_group_edit" style="display:none;">
+                <label>Bodega Destino</label>
+                <select name="warehouse_id" id="edit_warehouse_id" class="ts-select">
+                    <option value="">-- Seleccionar Bodega --</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.WarehouseID }}" data-terminal="{{ w.TerminalID }}">{{ w.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Empresa</label>
+                <select name="company_id" id="edit_company_id" class="form-control">
+                    {% for c in companies %}
+                    <option value="{{ c.CompanyID }}">{{ c.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" id="terminal_filter_group_edit">
+                <label>Terminal / Base</label>
+                <select id="terminal_select_edit" name="terminal_id" class="form-control" onchange="filterOptionsByTerminal('edit')" required>
+                    <option value="">-- Seleccionar Terminal --</option>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Equipo</label>
+                <select name="device_type_id" id="edit_device_type" class="ts-select" required>
+                    <option value="">-- Seleccionar Equipo --</option>
+                    {% for dt in device_types %}
+                    <option value="{{ dt.DeviceTypeID }}">{{ dt.Type }} {{ dt.Brand }} {{ dt.Model }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Número de Serie</label>
+                <input type="text" name="serial" id="edit_serial" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Tipo Activo</label>
+                <select name="asset_type" id="edit_asset_type" class="form-control">
+                    <option value="FIJO">FIJO</option>
+                    <option value="LEASING">LEASING</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Fecha de Asignación</label>
+                <input type="date" name="date" id="edit_date" class="form-control">
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="is_mobile" id="is_mobile_edit" onchange="toggleMobileFields('edit')">
+                    ¿Es un equipo móvil (Celular/Tablet)?
+                </label>
+            </div>
+
+            <div id="mobile_fields_edit" style="display:none; background:var(--hgt-slate); padding:1rem; border-radius:8px; margin-bottom:1rem; border-left:4px solid var(--hgt-orange);">
+                <div class="form-group">
+                    <label>Compañía Telefónica</label>
+                    <select name="mobile_company" id="edit_mobile_company" class="form-control">
+                        <option value="">-- Seleccionar --</option>
+                        <option value="ENTEL">ENTEL</option>
+                        <option value="MOVISTAR">MOVISTAR</option>
+                        <option value="CLARO">CLARO</option>
+                        <option value="WOM">WOM</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Número de Línea</label>
+                    <input type="text" name="mobile_number" id="edit_mobile_number" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Número Serie SIM</label>
+                    <input type="text" name="mobile_sim" id="edit_mobile_sim" class="form-control" placeholder="Número de serie de la SIM">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="is_temporary" id="edit_is_temporary" onchange="document.getElementById('return_date_edit').style.display = this.checked ? 'block' : 'none'">
+                    ¿Es asignación temporal?
+                </label>
+            </div>
+            <div class="form-group" id="return_date_edit" style="display:none;">
+                <label>Fecha de Devolución</label>
+                <input type="date" name="expected_return_date" id="edit_return_date" class="form-control">
+            </div>
+
+            <button type="submit" class="btn btn-primary">Actualizar Asignación</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Upload -->
+<div id="uploadModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <span class="close" onclick="closeModal('uploadModal')">&times;</span>
+        <h2><i class="fa-solid fa-file-arrow-up"></i> Subir PDF Firmado</h2>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="upload_document">
+            <input type="hidden" name="assignment_id" id="upload_assignment_id">
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label>Seleccionar Archivo (PDF)</label>
+                <input type="file" name="document" class="form-control" accept=".pdf" required>
+                <small style="display: block; margin-top: 0.5rem; color: var(--text-muted);">
+                    <i class="fa-solid fa-circle-info"></i> El archivo reemplazará cualquier documento anterior.
+                </small>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Subir Documento
+            </button>
+        </form>
+    </div>
+</div>
+
+    <script>
+        let assignmentsGrid;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+        assignmentsGrid = HGT_DataTable('assignmentsTable', {
+            onUpdate: (visible, total) => {
+                document.getElementById('totalCount').innerText = total;
+            }
+        });
+        
+        // Initialize TomSelect for searchable dropdowns (search box style)
+        document.querySelectorAll('.ts-select').forEach(el => {
+            try {
+                new TomSelect(el, {
+                    create: false,
+                    sortField: { field: "text", order: "asc" },
+                    placeholder: 'Escriba para buscar...',
+                    preload: false,
+                    minCharacters: 1,
+                    onDropdownOpen: function() {
+                        if (!this.controlInput.value.trim().length) {
+                            this.close();
+                        }
+                    },
+                    onType: function(str) {
+                        if (!str.trim().length) {
+                            this.close();
+                        }
+                    }
+                });
+            } catch(e) {
+                console.warn('TomSelect init failed for', el.id || el.name, e);
+            }
+        });
+        
+        // Add search icon and hide arrow to make it look like a search box
+        const style = document.createElement('style');
+        style.textContent = `
+            .ts-control::before { display: none !important; }
+            .ts-control { padding-left: 35px !important; cursor: text !important; }
+            .ts-dropdown .option { cursor: pointer; }
+            .ts-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #999; pointer-events: none; z-index: 10; }
+        `;
+        document.head.appendChild(style);
+        
+        document.querySelectorAll('.ts-control').forEach(control => {
+            if (!control.querySelector('.ts-search-icon')) {
+                const icon = document.createElement('i');
+                icon.className = 'fa-solid fa-magnifying-glass ts-search-icon';
+                control.style.position = 'relative';
+                control.insertBefore(icon, control.firstChild);
+            }
+        });
+        const searchInput = document.getElementById('assignmentsSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', updateSearch);
+        }
+        
+        // Initial application of filters
+        setTimeout(applyAllFilters, 100);
+    });
+
+    function toggleMobileFields(prefix) {
+        const isMobile = document.getElementById(`is_mobile_${prefix}`).checked;
+        const fields = document.getElementById(`mobile_fields_${prefix}`);
+        if (fields) fields.style.display = isMobile ? 'block' : 'none';
+    }
+    
+    const originalOptions = {};
+
+    function filterOptionsByTerminal(prefix) {
+        const terminalId = document.getElementById(`terminal_select_${prefix}`).value;
+        const staffEl = document.getElementById(prefix === 'create' ? 'staff_id_create' : 'edit_staff_id');
+        const warehouseEl = document.getElementById(prefix === 'create' ? 'warehouse_id_create' : 'edit_warehouse_id');
+        
+        if (!staffEl || !warehouseEl) return;
+        
+        const staffTS = staffEl.tomselect;
+        const warehouseTS = warehouseEl.tomselect;
+
+        const updateTS = (ts, el, id) => {
+            if (!ts) return;
+            const key = el.id;
+            if (!originalOptions[key]) {
+                originalOptions[key] = Array.from(el.options).map(o => ({
+                    value: o.value,
+                    text: o.text,
+                    terminal: o.dataset.terminal
+                }));
+            }
+
+            const currentVal = ts.getValue();
+            ts.clearOptions();
+            
+            originalOptions[key].forEach(opt => {
+                // Show if: no terminal selected, or matches terminal, or is the empty option
+                if (opt.value === "" || !terminalId || opt.terminal === terminalId) {
+                    ts.addOption(opt);
+                }
+            });
+            ts.refreshOptions(false);
+            if (currentVal) ts.setValue(currentVal, true);
+        };
+
+        updateTS(staffTS, staffEl, terminalId);
+        updateTS(warehouseTS, warehouseEl, terminalId);
+    }
+
+    function switchAssignType(btn, type, prefix) {
+        const modal = btn.closest('.modal-content');
+        modal.querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        if (type === 'person') {
+            document.getElementById(`staff_group_${prefix}`).style.display = 'block';
+            document.getElementById(`warehouse_group_${prefix}`).style.display = 'none';
+            const termFilter = document.getElementById(`terminal_filter_group_${prefix}`);
+            if (termFilter) termFilter.style.display = 'block';
+        } else {
+            document.getElementById(`staff_group_${prefix}`).style.display = 'none';
+            document.getElementById(`warehouse_group_${prefix}`).style.display = 'block';
+            const termFilter = document.getElementById(`terminal_filter_group_${prefix}`);
+            if (termFilter) termFilter.style.display = 'none';
+        }
+    }
+
+    let currentTab = 'all';
+
+    function updateSearch() {
+        applyAllFilters();
+    }
+
+    function filterAssignments(type, btn) {
+        const tabs = btn.parentElement.querySelectorAll('.tab-link');
+        tabs.forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        currentTab = type;
+        applyAllFilters();
+    }
+
+    function applyAllFilters() {
+        if (!assignmentsGrid) return;
+        const term = document.getElementById('assignmentsSearch').value.trim().toLowerCase();
+        
+        assignmentsGrid.setFilter(row => {
+            // Tab Filter
+            const isTemp = row.dataset.isTemp == '1';
+            const isOverdue = row.dataset.isOverdue == '1';
+            let tabMatch = true;
+            
+            if (currentTab === 'temporary') tabMatch = isTemp;
+            else if (currentTab === 'overdue') tabMatch = isOverdue;
+            
+            if (!tabMatch) return false;
+
+            // Search Filter
+            if (term === '') return true;
+            return row.innerText.toLowerCase().includes(term);
+        });
+    }
+    
+    function openUploadModal(id) {
+        document.getElementById('upload_assignment_id').value = id;
+        openModal('uploadModal');
+    }
+    
+    function HGT_OpenEditAssignment(assignmentId) {
+        if (!assignmentId) {
+            showPremiumAlert('error', 'ID de asignación no válido.');
+            return;
+        }
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/assignments/' + assignmentId + '/data', true);
+        xhr.setRequestHeader('Accept', 'application/json');
+        
+        xhr.onload = function () {
+            if (xhr.status !== 200) {
+                var errMsg = 'Error al cargar datos';
+                try {
+                    var errResp = JSON.parse(xhr.responseText);
+                    if (errResp.error) errMsg = errResp.error;
+                } catch (_) {}
+                showPremiumAlert('error', errMsg + ' (código ' + xhr.status + '). Intente nuevamente.');
+                return;
+            }
+            try {
+                var d = JSON.parse(xhr.responseText);
+                
+                document.getElementById('edit_assignment_id').value = d.AssignmentID;
+
+                var filterEl = document.getElementById('terminal_select_edit');
+                if (filterEl) {
+                    filterEl.value = d.TerminalID || '';
+                    filterOptionsByTerminal('edit');
+                }
+
+                var setTS = function (id, val) {
+                    var el = document.getElementById(id);
+                    if (el && el.tomselect) el.tomselect.setValue(val != null ? String(val) : '');
+                };
+                setTS('edit_staff_id', d.StaffID);
+                setTS('edit_warehouse_id', d.WarehouseID);
+                setTS('edit_device_type', d.DeviceTypeID);
+
+                var setVal = function (id, val) {
+                    var el = document.getElementById(id);
+                    if (el) el.value = val != null ? val : '';
+                };
+                setVal('edit_serial', d.Serial);
+                setVal('edit_asset_type', d.AssetType);
+                setVal('edit_date', d.AssignmentDate);
+                setVal('edit_company_id', d.CompanyID);
+
+                var isTemp = d.IsTemporary === true || d.IsTemporary === 'True' || d.IsTemporary === 1 || d.IsTemporary === '1';
+                var tempEl = document.getElementById('edit_is_temporary');
+                if (tempEl) tempEl.checked = isTemp;
+                var retEl = document.getElementById('return_date_edit');
+                if (retEl) retEl.style.display = isTemp ? 'block' : 'none';
+                setVal('edit_return_date', d.ExpectedReturnDate);
+
+                var isMobile = d.IsMobile === true || d.IsMobile === 1 || d.IsMobile === '1' || d.IsMobile === 'True';
+                var mobEl = document.getElementById('edit_is_mobile');
+                if (mobEl) mobEl.checked = isMobile;
+                var mobFields = document.getElementById('mobile_fields_edit');
+                if (mobFields) mobFields.style.display = isMobile ? 'block' : 'none';
+                setVal('edit_mobile_company', d.MobileCompany);
+                setVal('edit_mobile_number', d.MobileNumber);
+                setVal('edit_mobile_sim', d.MobileSIM);
+
+                var tabWarehouse = document.getElementById('tab_edit_warehouse');
+                var tabPerson = document.getElementById('tab_edit_person');
+                if (d.WarehouseID && d.WarehouseID !== '' && d.WarehouseID !== '0') {
+                    if (tabWarehouse) switchAssignType(tabWarehouse, 'warehouse', 'edit');
+                } else {
+                    if (tabPerson) switchAssignType(tabPerson, 'person', 'edit');
+                }
+
+                openModal('editAssignmentModal');
+            } catch (e) {
+                console.error('Error populating edit form:', e);
+                showPremiumAlert('error', 'Error al procesar los datos de la asignación.');
+            }
+        };
+
+        xhr.onerror = function () {
+            showPremiumAlert('error', 'Error de conexión al servidor. Verifique su conexión e intente nuevamente.');
+        };
+
+        xhr.send();
+    }
+    
+    function HGT_ShowQR(btn) {
+        const data = btn.dataset;
+        const qrContainer = document.getElementById("qrcode");
+        if (!qrContainer) {
+            console.error("QR Container not found - ensure QR modal is in base.html");
+            return;
+        }
+        qrContainer.innerHTML = "";
+        
+        const qrText = `EQUIPO: ${data.type}\nMARCA: ${data.brand}\nMODELO: ${data.model}\nSERIE: ${data.serial}`;
+        new QRCode(qrContainer, { text: qrText, width: 180, height: 180 });
+        
+        const qrDetails = document.getElementById("qr_details");
+        if (qrDetails) {
+            qrDetails.innerText = `${data.type} - ${data.serial}`;
+        }
+        openModal('qrModal');
+    }
+    
+    function printQR() {
+        const qrImg = document.querySelector("#qrcode img");
+        if (!qrImg) return;
+        const win = window.open('', 'Print QR', 'height=400,width=400');
+        win.document.write('<html><body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">');
+        win.document.write(`<h2>HGT - Control de Activos</h2>`);
+        win.document.write(`<img src="${qrImg.src}" style="width:250px;"/>`);
+        win.document.write(`<p style="margin-top:20px; font-weight:bold;">${document.getElementById("qr_details").innerText}</p>`);
+        win.document.write('</body></html>');
+        win.document.close();
+        win.print();
+    }
+</script>
+{% endblock %}

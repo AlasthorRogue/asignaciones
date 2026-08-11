@@ -1,0 +1,570 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    :root {
+        --hgt-orange: #FF6600;
+        --hgt-greyblue: #212A37;
+        --hgt-aqua: #68BFAD;
+        --hgt-white: #FFFFFF;
+        --hgt-light: #F5F5F5;
+    }
+    
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        background: var(--hgt-greyblue);
+        color: white;
+        margin: -2rem -2rem 1.5rem -2rem;
+    }
+    .page-header h1 { margin: 0; font-size: 1.75rem; color: white; }
+    .page-header h1 i { color: var(--hgt-orange); margin-right: 0.5rem; }
+    
+    .stats-bar {
+        display: flex;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .stat-item {
+        padding: 0.5rem 1rem;
+        background: var(--hgt-light);
+        border-radius: 6px;
+        font-weight: 500;
+    }
+    .stat-item strong { color: var(--hgt-orange); font-size: 1.25rem; }
+    
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+        background: var(--hgt-greyblue);
+        color: white;
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+    }
+    .data-table td {
+        padding: 0.875rem 1rem;
+        border-bottom: 1px solid #eee;
+    }
+    .data-table tr:nth-child(even) { background: #fafafa; }
+    .data-table tr:hover { background: rgba(255,102,0,0.05); }
+    
+    .table-container.datagrid-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-top:1rem;
+    }
+    .data-table { min-width: 1100px; }
+    
+    /* Asegurar que la columna de acciones sea visible */
+    .data-table th:last-child,
+    .data-table td:last-child {
+        min-width: 120px;
+        width: 120px;
+    }
+    
+    .data-table td:last-child,
+    .data-table td.dt-actions-col {
+        min-width: 120px !important;
+        width: 120px !important;
+        display: table-cell !important;
+    }
+    .data-table td:last-child *,
+    .data-table td.dt-actions-col * {
+        display: inline-block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    .serial-badge {
+        background: var(--hgt-greyblue);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: monospace;
+        font-weight: 600;
+    }
+    
+    .btn-action {
+        padding: 0.375rem 0.625rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 0.25rem;
+        transition: all 0.2s;
+    }
+    .btn-view { background: var(--hgt-aqua); color: white; }
+    .btn-view:hover { background: #5aa89c; }
+    .btn-history { background: var(--hgt-greyblue); color: white; }
+    .btn-history:hover { background: #1a1f2a; }
+    .btn-edit { background: var(--hgt-orange); color: white; }
+    .btn-edit:hover { background: #d95700; }
+    
+    .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        background: white;
+        border-top: 1px solid #eee;
+    }
+    .pagination-info { color: #666; font-size: 0.9rem; }
+    .pagination-controls { display: flex; gap: 0.5rem; align-items: center; }
+    .page-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        color: var(--hgt-greyblue);
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+    .page-btn:hover:not(:disabled) { border-color: var(--hgt-orange); color: var(--hgt-orange); }
+    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .page-current {
+        padding: 0.5rem 1rem;
+        background: var(--hgt-light);
+        border-radius: 4px;
+        font-weight: 600;
+    }
+    
+    .search-box { padding: 0 1.5rem; margin-bottom: 1rem; }
+    .search-input {
+        padding: 0.75rem 1rem 0.75rem 2.5rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        width: 100%;
+        max-width: 400px;
+        font-size: 0.95rem;
+    }
+    .search-input:focus {
+        outline: none;
+        border-color: var(--hgt-orange);
+        box-shadow: 0 0 0 3px rgba(255,102,0,0.1);
+    }
+    .search-wrapper { position: relative; }
+    .search-icon { position: absolute; left: 0.875rem; top: 50%; transform: translateY(-50%); color: #999; }
+    
+    .btn-primary {
+        background: var(--hgt-orange);
+        color: white;
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 6px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .btn-primary:hover { background: #d95700; }
+    
+    .empty-state { text-align: center; padding: 3rem; color: #888; }
+    .empty-state i { font-size: 3rem; color: var(--hgt-aqua); margin-bottom: 1rem; }
+    
+    .loading-spinner { text-align: center; padding: 3rem; }
+    .loading-spinner i { font-size: 2rem; color: var(--hgt-orange); animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    
+    .history-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+        gap: 1rem;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .history-badge.created { background: #d4edda; color: #155724; }
+    .history-badge.updated { background: #fff3cd; color: #856404; }
+    .history-badge.deleted { background: #f8d7da; color: #721c24; }
+</style>
+
+<div class="page-header">
+    <h1><i class="fa-solid fa-boxes-stacked"></i> Inventario de Equipos</h1>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="{{ url_for('inventory.download_template') }}" class="btn-primary" style="background: var(--hgt-greyblue);">
+            <i class="fa-solid fa-download"></i> Descargar Plantilla
+        </a>
+        {% if session.get('permissions', {}).get('bulk_inventory') %}
+        <button onclick="openBulkUploadModal()" class="btn-primary" style="background: var(--hgt-aqua); color: var(--hgt-greyblue);">
+            <i class="fa-solid fa-upload"></i> Carga Masiva
+        </button>
+        {% endif %}
+        {% if session.get('permissions', {}).get('export_inventory') %}
+        <a href="{{ url_for('inventory.export_inventory') }}" class="btn-primary">
+            <i class="fa-solid fa-file-excel"></i> Exportar Excel
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="control-panel">
+    <div class="tabs" style="margin-bottom: 1rem; border-bottom: none;">
+        <button class="tab-link active" onclick="switchInventoryTab('all', this)">Todos</button>
+        <button class="tab-link" onclick="switchInventoryTab('terminal', this)">Por Terminal</button>
+        <button class="tab-link" onclick="switchInventoryTab('warehouse', this)">Por Bodega</button>
+        <button class="tab-link" onclick="switchInventoryTab('device', this)">Dispositivo</button>
+    </div>
+
+    <div id="terminalFilterContainer" class="tab-filter-extra" style="display:none; margin: 0.5rem 0;">
+        <select id="terminalSelect" class="form-control" onchange="applyInventoryFilters()" style="max-width:300px;">
+            <option value="">Seleccione Terminal...</option>
+            {% for t in terminals %}
+            <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div id="warehouseFilterContainer" class="tab-filter-extra" style="display:none; margin: 0.5rem 0;">
+        <select id="warehouseSelect" class="form-control" onchange="applyInventoryFilters()" style="max-width:300px;">
+            <option value="">Seleccione Bodega...</option>
+            {% for w in warehouses %}
+            <option value="{{ w.WarehouseID }}">{{ w.Name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div id="deviceFilterContainer" class="tab-filter-extra" style="display:none; margin: 0.5rem 0;">
+        <select id="deviceSelect" class="form-control" onchange="applyInventoryFilters()" style="max-width:300px;">
+            <option value="">Seleccione Dispositivo...</option>
+            {% for d in device_types | map(attribute='TypeName') | unique %}
+            <option value="{{ d }}">{{ d }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="unified-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="inventorySearch" placeholder="Busca por serie, equipo, terminal o responsable...">
+    </div>
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-layer-group"></i> Total <strong id="totalCount">0</strong></div>
+        <div class="stat-pill"><i class="fa-solid fa-filter"></i> Filtrados <strong id="filteredCount">0</strong></div>
+    </div>
+</div>
+
+    <div class="table-container">
+        <table class="table" id="inventoryTable">
+            <thead>
+                <tr>
+                    <th>Terminal</th>
+                    <th>Responsable</th>
+                    <th>Ubicación</th>
+                    <th>Equipo</th>
+                    <th>Serie</th>
+                    <th>Tipo</th>
+                    <th>Móvil</th>
+                    <th>Asignación</th>
+                    <th>Fecha</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in inventory %}
+                <tr class="searchable-row" 
+                    data-search="{{ item.Serial }} {{ item.StaffName }} {{ item.WarehouseName }} {{ item.TypeName }} {{ item.TerminalName }}"
+                    data-terminal-id="{{ item.TerminalID or '' }}"
+                    data-warehouse-id="{{ item.WarehouseID or '' }}"
+                    data-device-type="{{ item.TypeName or '' }}">
+                    <td><i class="fa-solid fa-location-dot" style="color:var(--hgt-orange)"></i> {{ item.TerminalName or 'N/A' }}</td>
+                    <td>
+                        {% if item.StaffName %}
+                            <div style="font-weight: 600; color: var(--text-main);">{{ item.StaffName }}</div>
+                            <small style="color: var(--text-muted);">{{ item.RUT }}</small>
+                        {% else %}
+                            <span class="pill system"><i class="fa-solid fa-warehouse"></i> BODEGA</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.WarehouseName %}
+                            <span class="status-badge warehouse"><i class="fa-solid fa-warehouse"></i> {{ item.WarehouseName }}</span>
+                        {% else %}
+                            <span class="status-badge assigned"><i class="fa-solid fa-user-check"></i> Asignado</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="font-weight: 500;">{{ item.TypeName }}</div>
+                        <small style="color: #888;">{{ item.Brand }} {{ item.Model }}</small>
+                    </td>
+                    <td><span class="badge-serial">{{ item.Serial }}</span></td>
+                    <td><small>{{ item.AssetType }}</small></td>
+                    <td>
+                        {% if item.IsMobile %}
+                            <span class="status-badge mobile" title="{{ item.MobileNumber }}"><i class="fa-solid fa-mobile-screen"></i> {{ item.MobileNumber or 'Móvil' }}</span>
+                        {% else %}
+                            <span style="color: var(--hgt-border); font-size:1.2rem;">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.IsTemporary %}
+                            {% set is_overdue = item.ExpectedReturnDate and item.ExpectedReturnDate < now %}
+                            {% if is_overdue %}
+                                <span class="status-badge overdue"><i class="fa-solid fa-triangle-exclamation"></i> VENCIDA<br><small>{{ item.ExpectedReturnDate.strftime('%d/%m/%Y') }}</small></span>
+                            {% else %}
+                                <span class="status-badge temporary"><i class="fa-solid fa-clock"></i> TEMPORAL{% if item.ExpectedReturnDate %}<br><small>Dev: {{ item.ExpectedReturnDate.strftime('%d/%m/%Y') }}</small>{% endif %}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="status-badge assigned"><i class="fa-solid fa-infinity"></i> INDEFINIDA</span>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ item.AssignmentDate.strftime('%d/%m/%Y') if item.AssignmentDate else 'N/A' }}</small></td>
+                    <td>
+                        {% if session.get('permissions', {}).get('view_history') %}
+                        <button class="btn-action btn-history" onclick="showHistory('{{ item.Serial }}')" title="Historial">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </button>
+                        {% endif %}
+                        {% if session.get('permissions', {}).get('edit_inventory') %}
+                        <button class="btn-action btn-edit" onclick="openEditModal('{{ item.AssignmentID }}', '{{ item.DeviceTypeID }}', '{{ item.Serial }}', '{{ item.AssetType }}', '{{ item.StaffID or '' }}', '{{ item.WarehouseID or '' }}', '{{ item.CompanyID }}', '{{ item.IsMobile }}', '{{ item.MobileCompany or '' }}', '{{ item.MobileNumber or '' }}', '{{ item.MobileSIM or '' }}', '{{ item.TerminalID or '' }}')" title="Editar">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        {% endif %}
+                        {% if session.get('permissions', {}).get('view_qr') %}
+                        <button class="btn-action btn-view" onclick="HGT_ShowQR(this)" 
+                                data-type="{{ item.TypeName }}" 
+                                data-brand="{{ item.Brand }}" 
+                                data-model="{{ item.Model }}" 
+                                data-serial="{{ item.Serial }}" title="Ver QR">
+                            <i class="fa-solid fa-qrcode"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr class="no-pag"><td colspan="10" class="empty-state"><i class="fa-solid fa-inbox"></i><p>No hay registros</p></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+<!-- Pagination is handled by HGT_Paginate -->
+
+<!-- Edit Modal -->
+<div class="modal" id="editModal" style="display:none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('editModal')">&times;</span>
+        <h2>Editar Asignación</h2>
+        <form method="POST" action="{{ url_for('inventory.edit_inventory') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="assignment_id" id="edit_assignment_id">
+            <div class="form-group">
+                <label>Serie</label>
+                <input type="text" name="serial" id="edit_serial" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Tipo Equipo</label>
+                <select name="device_type_id" id="edit_device_type_id" class="form-control" required>
+                    {% for dt in device_types %}
+                    <option value="{{ dt.DeviceTypeID }}">{{ dt.TypeName }} - {{ dt.Brand }} {{ dt.Model }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Terminal / Base</label>
+                <select name="terminal_id" id="edit_terminal_id" class="form-control">
+                    <option value="">-- Seleccionar --</option>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Funcionario</label>
+                <select name="staff_id" id="edit_staff_id" class="form-control">
+                    <option value="">-- Seleccionar --</option>
+                    {% for s in staff %}
+                    <option value="{{ s.StaffID }}">{{ s.FirstName }} {{ s.LastName }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Bodega</label>
+                <select name="warehouse_id" id="edit_warehouse_id" class="form-control">
+                    <option value="">-- Seleccionar --</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.WarehouseID }}">{{ w.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Empresa</label>
+                <select name="company_id" id="edit_company_id" class="form-control">
+                    {% for c in companies %}
+                    <option value="{{ c.CompanyID }}">{{ c.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tipo Activo</label>
+                <input type="text" name="asset_type" id="edit_asset_type" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </form>
+    </div>
+</div>
+
+<!-- QR Modal is in base.html -->
+
+<!-- History Modal -->
+<div class="modal" id="historyModal">
+    <div class="modal-content" style="max-width:600px;">
+        <button type="button" class="modal-close-btn" onclick="closeModal('historyModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h3><i class="fa-solid fa-clock-rotate-left"></i> Trazabilidad: <span id="historySerial" style="color:var(--hgt-orange)"></span></h3>
+        <div id="historyBody" style="max-height:400px;overflow-y:auto;"></div>
+    </div>
+</div>
+
+<!-- Bulk Upload Modal -->
+<div class="modal" id="bulkUploadModal">
+    <div class="modal-content" style="max-width:500px;">
+        <button type="button" class="modal-close-btn" onclick="closeModal('bulkUploadModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h3><i class="fa-solid fa-upload"></i> Carga Masiva de Inventario</h3>
+        <p style="color: #666; margin-bottom: 1rem;">Sube un archivo Excel con el formato de la plantilla descargable.</p>
+        <form method="POST" action="{{ url_for('inventory.bulk_upload') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label>Archivo Excel</label>
+                <input type="file" name="file" accept=".xlsx,.xls" class="form-control" required>
+                <small style="color: #888;">Formatos soportados: .xlsx, .xls</small>
+            </div>
+            <div style="margin-top: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; font-size: 0.85rem; color: #666;">
+                <strong>Instrucciones:</strong>
+                <ul style="margin: 0.5rem 0 0 1rem; padding: 0;">
+                    <li>Descarga la plantilla primero</li>
+                    <li>Si el RUT no existe, se creará el personal automáticamente</li>
+                    <li>La columna Terminal se usa solo para crear nuevo personal</li>
+                    <li>El serial debe ser único</li>
+                </ul>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">
+                <i class="fa-solid fa-upload"></i> Subir y Procesar
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Initialize DataTable same as assignments
+    window.HGT_InventoryGrid = HGT_DataTable('inventoryTable', {
+        buttons: [], // Remove Excel, PDF, Print buttons
+        onUpdate: (visible, total) => {
+            document.getElementById('totalCount').innerText = total;
+            document.getElementById('filteredCount').innerText = visible;
+        }
+    });
+
+    document.getElementById('inventorySearch').addEventListener('input', applyInventoryFilters);
+});
+
+let currentTab = 'all';
+
+function switchInventoryTab(type, btn) {
+    currentTab = type;
+    btn.closest('.tabs').querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    document.getElementById('terminalFilterContainer').style.display = (type === 'terminal' ? 'block' : 'none');
+    document.getElementById('warehouseFilterContainer').style.display = (type === 'warehouse' ? 'block' : 'none');
+    document.getElementById('deviceFilterContainer').style.display = (type === 'device' ? 'block' : 'none');
+    
+    applyInventoryFilters();
+}
+
+function applyInventoryFilters() {
+    const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
+    const selectedTerminal = document.getElementById('terminalSelect').value;
+    const selectedWarehouse = document.getElementById('warehouseSelect').value;
+    const selectedDevice = document.getElementById('deviceSelect').value;
+
+    window.HGT_InventoryGrid.setFilter(row => {
+        const rowTerminal = row.dataset.terminalId;
+        const rowWarehouse = row.dataset.warehouseId;
+        const rowDeviceType = row.dataset.deviceType;
+        const searchMatch = row.innerText.toLowerCase().includes(searchTerm);
+
+        if (!searchMatch) return false;
+        
+        if (currentTab === 'all') return true;
+        if (currentTab === 'terminal') {
+            return selectedTerminal === "" || rowTerminal === selectedTerminal;
+        }
+        if (currentTab === 'warehouse') {
+            return selectedWarehouse === "" || rowWarehouse === selectedWarehouse;
+        }
+        if (currentTab === 'device') {
+            return selectedDevice === "" || rowDeviceType === selectedDevice;
+        }
+        return true;
+    });
+}
+
+function showHistory(serial) {
+    if (!serial) return;
+    document.getElementById('historySerial').textContent = serial;
+    document.getElementById('historyBody').innerHTML = '<div class="loading-spinner"><i class="fa-solid fa-circle-notch fa-spin"></i><p>Cargando...</p></div>';
+    openModal('historyModal');
+    
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/inventory/history/' + encodeURIComponent(serial), true);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.onload = function() {
+        var body = document.getElementById('historyBody');
+        if (xhr.status === 200) {
+            try {
+                var data = JSON.parse(xhr.responseText);
+                if (data.error || !data.history || data.history.length === 0) {
+                    body.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clock"></i><p>Sin historial</p></div>';
+                    return;
+                }
+                var html = '';
+                data.history.forEach(function(item) {
+                    var dateStr = item[7] ? new Date(item[7]).toLocaleString('es-CL') : 'Sin fecha';
+                    var action = item[8] || 'UNKNOWN';
+                    var prevUser = item[9] ? '<br><small>De: ' + item[9] + '</small>' : '';
+                    html += '<div class="history-item">' +
+                        '<div><strong>' + (item[1] || 'N/A') + '</strong><small>(' + (item[2] || 'N/A') + ')</small>' +
+                        '<br><small>' + (item[3] || '') + ' - ' + (item[4] || '') + ' ' + (item[5] || '') + '</small>' + prevUser +
+                        '<br><small>' + dateStr + '</small></div>' +
+                        '<span class="history-badge ' + action.toLowerCase() + '">' + action + '</span></div>';
+                });
+                body.innerHTML = html;
+            } catch(e) { body.innerHTML = '<div class="empty-state"><p>Error</p></div>'; }
+        } else { body.innerHTML = '<div class="empty-state"><p>Error: ' + xhr.status + '</p></div>'; }
+    };
+    xhr.onerror = function() { document.getElementById('historyBody').innerHTML = '<div class="empty-state"><p>Error de conexión</p></div>'; };
+    xhr.send();
+}
+
+function openEditModal(id, deviceTypeId, serial, assetType, staffId, warehouseId, companyId, isMobile, mCompany, mNumber, mSim, terminalId) {
+    document.getElementById('edit_assignment_id').value = id;
+    document.getElementById('edit_serial').value = serial || '';
+    document.getElementById('edit_device_type_id').value = deviceTypeId;
+    document.getElementById('edit_staff_id').value = staffId || '';
+    document.getElementById('edit_warehouse_id').value = warehouseId || '';
+    document.getElementById('edit_company_id').value = companyId || '';
+    document.getElementById('edit_asset_type').value = assetType || 'FIJO';
+    document.getElementById('edit_terminal_id').value = terminalId || '';
+    document.getElementById('editModal').style.display = 'block';
+}
+
+function openBulkUploadModal() {
+    document.getElementById('bulkUploadModal').style.display = 'block';
+}
+</script>
+{% endblock %}

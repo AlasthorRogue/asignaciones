@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-list-check"></i> Catálogo de Equipos</h1>
+    <button class="btn btn-primary" onclick="openModal('createTypeModal')">
+        <i class="fa-solid fa-plus"></i> Añadir Tipo de Equipo
+    </button>
+</div>
+
+<div class="control-panel">
+    <div class="unified-search">
+        <i class="fa-solid fa-microchip"></i>
+        <input type="text" id="dtSearch" placeholder="Busca por tipo, marca o modelo...">
+    </div>
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-list-ol"></i> Modelos <strong id="totalCount">0</strong></div>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="dtTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tipo</th>
+                <th>Marca</th>
+                <th>Modelo</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dt in device_types %}
+            <tr class="searchable-row">
+                <td><span style="color:var(--text-muted); font-weight:600; font-size:0.85rem;">#{{ dt.DeviceTypeID }}</span></td>
+                <td>
+                    <span style="background:var(--hgt-orange-glow); color:var(--hgt-orange-dark); padding:0.2rem 0.65rem; border-radius:6px; font-size:0.82rem; font-weight:700;">{{ dt.TypeName }}</span>
+                </td>
+                <td><strong style="color:var(--text-main);">{{ dt.Brand }}</strong></td>
+                <td><span style="color:var(--text-muted);">{{ dt.Model }}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" title="Editar" onclick="openEditModal('{{ dt.DeviceTypeID }}', '{{ dt.TypeName }}', '{{ dt.Brand }}', '{{ dt.Model }}')"><i class="fa-solid fa-pen"></i></button>
+                    <form action="{{ url_for('device_types.manage_device_types') }}" method="POST" class="action-form" onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar este equipo del catálogo?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="device_type_id" value="{{ dt.DeviceTypeID }}">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Create Modal -->
+<div id="createTypeModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('createTypeModal')">&times;</span>
+        <h2>Nuevo tipo de equipo</h2>
+        <form action="{{ url_for('device_types.manage_device_types') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Tipo (Ej: Notebook, PC, Impresora)</label>
+                <input type="text" name="type_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Marca (Ej: Dell, Lenovo, HP)</label>
+                <input type="text" name="brand" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Modelo (Ej: Latitude 5420, ThinkPad X1)</label>
+                <input type="text" name="model" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar en Catálogo</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editTypeModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('editTypeModal')">&times;</span>
+        <h2>Editar tipo de equipo</h2>
+        <form action="{{ url_for('device_types.manage_device_types') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="device_type_id" id="edit_dt_id">
+            <div class="form-group">
+                <label>Tipo</label>
+                <input type="text" name="type_name" id="edit_dt_type" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Marca</label>
+                <input type="text" name="brand" id="edit_dt_brand" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Modelo</label>
+                <input type="text" name="model" id="edit_dt_model" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Actualizar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openEditModal(id, type, brand, model) {
+        document.getElementById('edit_dt_id').value = id;
+        document.getElementById('edit_dt_type').value = type;
+        document.getElementById('edit_dt_brand').value = brand;
+        document.getElementById('edit_dt_model').value = model;
+        openModal('editTypeModal');
+    }
+
+    // Pagination & Search
+    document.addEventListener("DOMContentLoaded", function() {
+        const grid = HGT_DataTable('dtTable', { 
+            onUpdate: (visible, total) => {
+                document.getElementById('totalCount').innerText = total;
+            }
+        });
+    });
+</script>
+{% endblock %}

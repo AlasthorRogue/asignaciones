@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        background: var(--hgt-greyblue);
+        color: white;
+        margin: -2rem -2rem 1.5rem -2rem;
+    }
+    .page-header h1 { margin: 0; font-size: 1.75rem; color: white; }
+    .page-header h1 i { color: var(--hgt-orange); margin-right: 0.5rem; }
+</style>
+
+<div class="page-header">
+    <h1><i class="fa-solid fa-rotate-left"></i> Devoluciones de Equipo</h1>
+    {% if session.get('permissions', {}).get('create_return') %}
+    <button class="btn btn-primary" onclick="openCreateReturnModal()">
+        <i class="fa-solid fa-plus"></i> Nueva Devolución
+    </button>
+    {% endif %}
+</div>
+
+<div class="control-panel">
+    <div class="unified-search">
+        <i class="fa-solid fa-rotate-left"></i>
+        <input type="text" id="returnsSearch" placeholder="Busca por serie, equipo, personal o bodega...">
+    </div>
+    <div class="panel-stats">
+        <div class="stat-pill"><i class="fa-solid fa-list-check"></i> <strong id="totalCount">0</strong></div>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="returnsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Serie</th>
+                <th>Equipo</th>
+                <th>Devuelto Por</th>
+                <th>Bodega Destino</th>
+                <th>Fecha Devolución</th>
+                <th>Observaciones</th>
+                <th>Documento</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in returns %}
+            <tr class="searchable-row"
+                data-search="{{ r.Serial }} {{ r.DeviceDescription }} {{ r.StaffName }} {{ r.WarehouseName }}">
+                <td>{{ r.ReturnID }}</td>
+                <td><span class="badge-serial">{{ r.Serial or '—' }}</span></td>
+                <td><strong>{{ r.DeviceDescription or '—' }}</strong></td>
+                <td>{{ r.StaffName or '—' }}</td>
+                <td>
+                    <span class="status-badge warehouse">
+                        <i class="fa-solid fa-warehouse"></i> {{ r.WarehouseName or '—' }}
+                    </span>
+                </td>
+                <td>{{ r.ReturnDate.strftime('%d/%m/%Y') if r.ReturnDate else '—' }}</td>
+                <td>
+                    {% if r.Notes %}
+                        <span title="{{ r.Notes }}">{{ r.Notes[:40] }}{% if r.Notes|length > 40 %}…{% endif %}</span>
+                    {% else %}
+                        <span style="color:var(--text-muted);">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if session.get('permissions', {}).get('view_return_document') %}
+                    <a href="{{ url_for('returns.view_return_document', return_id=r.ReturnID) }}"
+                       target="_blank"
+                       class="btn btn-secondary btn-sm"
+                       title="{{ 'Ver Acta de Devolución' if r.SignedDocumentPath else 'Documento no disponible' }}"
+                       {% if not r.SignedDocumentPath %}style="opacity:.4; pointer-events:none;"{% endif %}>
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </a>
+                    {% endif %}
+                    {% if session.get('permissions', {}).get('upload_return_document') %}
+                    <button class="btn btn-secondary btn-sm"
+                            onclick="openUploadReturnModal('{{ r.ReturnID }}')"
+                            title="Reemplazar con PDF firmado escaneado">
+                        <i class="fa-solid fa-upload"></i>
+                    </button>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if session.get('permissions', {}).get('delete_return') %}
+                    <form method="POST" class="action-form"
+                          onsubmit="return confirmDeletion(event, '¿Seguro que desea eliminar esta devolución?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="return_id" value="{{ r.ReturnID }}">
+                        <button type="submit" class="btn btn-danger btn-sm" title="Eliminar">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal: Nueva Devolución -->
+<div id="createReturnModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('createReturnModal')">&times;</span>
+        <h2><i class="fa-solid fa-rotate-left" style="color:var(--hgt-orange);"></i> Nueva Devolución</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+
+            <div class="form-group">
+                <label>Asignación a Devolver</label>
+                <select name="assignment_id" id="return_assignment_id" class="ts-select" required
+                        onchange="onAssignmentSelected(this)">
+                    <option value="">-- Escriba para buscar asignación --</option>
+                    {% for a in assignments %}
+                    <option value="{{ a.AssignmentID }}"
+                            data-serial="{{ a.Serial }}"
+                            data-device="{{ a.Type }} {{ a.Brand }} {{ a.Model }}"
+                            data-staff="{{ a.FullName }}">
+                        [#{{ a.AssignmentID }}] {{ a.Serial }} — {{ a.Type }} {{ a.Brand }} {{ a.Model }}
+                        ({{ a.FullName }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <small style="color:var(--text-muted);">Busque por número de serie, equipo o nombre de funcionario.</small>
+            </div>
+
+            <!-- Info preview del equipo seleccionado -->
+            <div id="assignmentPreview" style="display:none; background:var(--hgt-slate); padding:0.75rem 1rem; border-radius:8px; margin-bottom:1rem; border-left:4px solid var(--hgt-orange);">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.9rem;">
+                    <div><i class="fa-solid fa-barcode" style="color:var(--hgt-orange);"></i> <strong>Serie:</strong> <span id="preview_serial">—</span></div>
+                    <div><i class="fa-solid fa-laptop" style="color:var(--hgt-orange);"></i> <strong>Equipo:</strong> <span id="preview_device">—</span></div>
+                    <div><i class="fa-solid fa-user" style="color:var(--hgt-orange);"></i> <strong>Asignado a:</strong> <span id="preview_staff">—</span></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Bodega de Destino</label>
+                <select name="warehouse_id" id="return_warehouse_id" class="form-control" required>
+                    <option value="">-- Seleccionar Bodega --</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.WarehouseID }}">{{ w.Name }}</option>
+                    {% endfor %}
+                </select>
+                {% if warehouses|length == 1 %}
+                <small style="color:var(--text-muted);"><i class="fa-solid fa-circle-info"></i> Se seleccionó la única bodega disponible automáticamente.</small>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label>Fecha de Devolución</label>
+                <input type="date" name="return_date" class="form-control" value="{{ now.strftime('%Y-%m-%d') }}">
+                <small style="color:var(--text-muted);">Por defecto se tomará el día de hoy.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Observaciones <span style="color:var(--text-muted);">(opcional)</span></label>
+                <textarea name="notes" class="form-control" rows="2" placeholder="Estado del equipo, motivo de devolución, etc." style="resize:vertical;"></textarea>
+            </div>
+
+            <div style="background:rgba(255,102,0,0.08); border:1px solid rgba(255,102,0,0.3); border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.88rem; color:var(--text-muted);">
+                <i class="fa-solid fa-circle-info" style="color:var(--hgt-orange);"></i>
+                Al confirmar, la asignación será eliminada del registro activo y el equipo quedará marcado como devuelto a bodega.
+                Podrá adjuntar el documento firmado después.
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width:100%;">
+                <i class="fa-solid fa-rotate-left"></i> Registrar Devolución
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Upload documento firmado -->
+<div id="uploadReturnModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <span class="close" onclick="closeModal('uploadReturnModal')">&times;</span>
+        <h2><i class="fa-solid fa-file-arrow-up"></i> Subir PDF Firmado</h2>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="upload_document">
+            <input type="hidden" name="return_id" id="upload_return_id">
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label>Seleccionar Archivo (PDF)</label>
+                <input type="file" name="document" class="form-control" accept=".pdf" required>
+                <small style="display: block; margin-top: 0.5rem; color: var(--text-muted);">
+                    <i class="fa-solid fa-circle-info"></i> El archivo reemplazará cualquier documento anterior.
+                </small>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Subir Documento
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // ----- Page init -----
+    let returnsGrid;
+    const warehouseCount = {{ warehouses|length }};
+
+    document.addEventListener('DOMContentLoaded', function () {
+        returnsGrid = HGT_DataTable('returnsTable', {
+            onUpdate: (visible, total) => {
+                document.getElementById('totalCount').innerText = total;
+            }
+        });
+
+        // TomSelect for the assignment dropdown
+        const assignEl = document.getElementById('return_assignment_id');
+        if (assignEl && !assignEl.tomselect) {
+            new TomSelect(assignEl, {
+                create: false,
+                sortField: { field: 'text', order: 'asc' },
+                placeholder: 'Escriba para buscar...',
+                minCharacters: 1,
+                onChange: function (value) {
+                    const opt = assignEl.options[assignEl.selectedIndex];
+                    if (value && opt) {
+                        document.getElementById('preview_serial').textContent  = opt.dataset.serial  || '—';
+                        document.getElementById('preview_device').textContent  = opt.dataset.device  || '—';
+                        document.getElementById('preview_staff').textContent   = opt.dataset.staff   || '—';
+                        document.getElementById('assignmentPreview').style.display = 'block';
+                    } else {
+                        document.getElementById('assignmentPreview').style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        // External search
+        const search = document.getElementById('returnsSearch');
+        if (search) search.addEventListener('input', function () {
+            returnsGrid.applySearch(this.value);
+        });
+    });
+
+    // Auto-select warehouse if only one exists
+    function openCreateReturnModal() {
+        const warehouseSel = document.getElementById('return_warehouse_id');
+        if (warehouseCount === 1 && warehouseSel && warehouseSel.options.length === 2) {
+            warehouseSel.selectedIndex = 1;
+        }
+        // Reset assignment preview
+        document.getElementById('assignmentPreview').style.display = 'none';
+        openModal('createReturnModal');
+    }
+
+    function onAssignmentSelected(sel) {
+        // called by native select onchange (TomSelect fires it too)
+    }
+
+    function openUploadReturnModal(returnId) {
+        document.getElementById('upload_return_id').value = returnId;
+        openModal('uploadReturnModal');
+    }
+</script>
+{% endblock %}

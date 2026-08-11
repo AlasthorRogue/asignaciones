@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-user-shield"></i> Gestión de Roles y Permisos</h1>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="{{ url_for('staff.download_staff_template') }}" class="btn-primary" style="background: var(--hgt-greyblue);">
+            <i class="fa-solid fa-download"></i> Descargar Plantilla
+        </a>
+        <button onclick="openBulkUploadStaffModal()" class="btn-primary" style="background: var(--hgt-aqua);">
+            <i class="fa-solid fa-upload"></i> Carga Masiva
+        </button>
+        <button class="btn-primary" onclick="openModal('createStaffModal')">
+            <i class="fa-solid fa-plus"></i> Nuevo Personal
+        </button>
+        <a href="{{ url_for('staff.export_staff') }}" class="btn-primary">
+            <i class="fa-solid fa-file-excel"></i> Exportar Excel
+        </a>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="table" id="rolesTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre del Rol</th>
+                <th>Configuración de Accesos al Menú</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in roles %}
+            <tr>
+                <td><span class="badge-serial">#{{ r.RoleID }}</span></td>
+                <td><strong>{{ r.RoleName }}</strong></td>
+                <td>
+                    <form method="POST" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="update_permissions">
+                        <input type="hidden" name="role_id" value="{{ r.RoleID }}">
+                        
+                        {% set role_perms = permissions.get(r.RoleID) %}
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; width: 100%; background: #f9f9f9; padding: 10px; border-radius: 8px;">
+                            {% for key in ['dashboard', 'companies', 'users', 'roles', 'terminals', 'staff', 'warehouses', 'device_types', 'assignments', 'inventory', 'stock', 'reports'] %}
+                            {% if key == 'dashboard' %}
+                                {% set label = 'Panel Principal' %}
+                            {% elif key == 'companies' %}
+                                {% set label = 'Empresas' %}
+                            {% elif key == 'users' %}
+                                {% set label = 'Usuarios' %}
+                            {% elif key == 'roles' %}
+                                {% set label = 'Roles y Permisos' %}
+                            {% elif key == 'terminals' %}
+                                {% set label = 'Terminales' %}
+                            {% elif key == 'staff' %}
+                                {% set label = 'Personal' %}
+                            {% elif key == 'warehouses' %}
+                                {% set label = 'Bodegas' %}
+                            {% elif key == 'device_types' %}
+                                {% set label = 'Tipos de Equipo' %}
+                            {% elif key == 'assignments' %}
+                                {% set label = 'Asignaciones' %}
+                            {% elif key == 'inventory' %}
+                                {% set label = 'Inventario' %}
+                            {% elif key == 'stock' %}
+                                {% set label = 'Stock' %}
+                            {% elif key == 'reports' %}
+                                {% set label = 'Informes' %}
+                            {% else %}
+                                {% set label = key %}
+                            {% endif %}
+                            <label style="display: flex; align-items: center; gap: 5px; font-size: 0.85rem; cursor: pointer;">
+                                <input type="checkbox" name="perm_{{ key }}" {{ 'checked' if role_perms and role_perms.get(key) else '' }}>
+                                {{ label }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                        
+                        <button type="submit" class="btn btn-secondary btn-sm" style="margin-top: 5px;">
+                            <i class="fa-solid fa-save"></i> Guardar Permisos
+                        </button>
+                    </form>
+                </td>
+                <td>
+                    {% if r.RoleName != 'ADMIN' %}
+                    <form method="POST" style="display:inline;" onsubmit="return confirm('¿Eliminar este rol? Los usuarios asociados quedarán sin rol.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="role_id" value="{{ r.RoleID }}">
+                        <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Create Role -->
+<div id="createRoleModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <button type="button" class="modal-close-btn" onclick="closeModal('createRoleModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h2>Crear Nuevo Rol</h2>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Nombre del Rol</label>
+                <input type="text" name="role_name" class="form-control" placeholder="Ej: AUDITOR, SUPERVISOR" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Crear Rol</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Create Staff -->
+<div id="createStaffModal" class="modal">
+    <div class="modal-content">
+        <button type="button" class="modal-close-btn" onclick="closeModal('createStaffModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h2>Registrar Nuevo Personal</h2>
+        <form method="POST" action="{{ url_for('staff.manage_staff') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="create">
+            <div class="form-group">
+                <label>Nombre</label>
+                <input type="text" name="first_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Apellido</label>
+                <input type="text" name="last_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>RUT</label>
+                <input type="text" name="rut" class="form-control" placeholder="12.345.678-9" required>
+            </div>
+            <div class="form-group">
+                <label>Área de Trabajo</label>
+                <input type="text" name="work_area" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" class="form-control" required>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit Staff -->
+<div id="editStaffModal" class="modal">
+    <div class="modal-content">
+        <button type="button" class="modal-close-btn" onclick="closeModal('editStaffModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h2>Editar Personal</h2>
+        <form method="POST" action="{{ url_for('staff.manage_staff') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="staff_id" id="edit_staff_id">
+            <div class="form-group">
+                <label>Nombre</label>
+                <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Apellido</label>
+                <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>RUT</label>
+                <input type="text" name="rut" id="edit_rut" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Área de Trabajo</label>
+                <input type="text" name="work_area" id="edit_work_area" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Terminal</label>
+                <select name="terminal_id" id="edit_terminal_id" class="form-control" required>
+                    {% for t in terminals %}
+                    <option value="{{ t.TerminalID }}">{{ t.Name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Actualizar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk Upload Staff Modal -->
+<div id="bulkUploadStaffModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <button type="button" class="modal-close-btn" onclick="closeModal('bulkUploadStaffModal')"><i class="fa-solid fa-xmark"></i></button>
+        <h3><i class="fa-solid fa-upload"></i> Carga Masiva de Personal</h3>
+        <p style="color: #666; margin-bottom: 1rem;">Sube un archivo Excel con el formato de la plantilla descargable.</p>
+        <form method="POST" action="{{ url_for('staff.bulk_upload_staff') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label>Archivo Excel</label>
+                <input type="file" name="file" accept=".xlsx,.xls" class="form-control" required>
+                <small style="color: #888;">Formatos soportados: .xlsx, .xls</small>
+            </div>
+            <div style="margin-top: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; font-size: 0.85rem; color: #666;">
+                <strong>Instrucciones:</strong>
+                <ul style="margin: 0.5rem 0 0 1rem; padding: 0;">
+                    <li>Descarga la plantilla primero</li>
+                    <li>El RUT debe ser único</li>
+                    <li>La columna Terminal debe coincidir exactamente con las terminales registradas</li>
+                </ul>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">
+                <i class="fa-solid fa-upload"></i> Subir y Procesar
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openBulkUploadStaffModal() {
+        openModal('bulkUploadStaffModal');
+    }
+
+    function openEditStaff(id, fname, lname, rut, area, termId) {
+        document.getElementById('edit_staff_id').value = id;
+        document.getElementById('edit_first_name').value = fname;
+        document.getElementById('edit_last_name').value = lname;
+        document.getElementById('edit_rut').value = rut;
+        document.getElementById('edit_work_area').value = area;
+        document.getElementById('edit_terminal_id').value = termId;
+        openModal('editStaffModal');
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        HGT_DataTable('rolesTable', { pageLength: 5 });
+    });
+</script>
+{% endblock %}
